@@ -1,14 +1,14 @@
 import { ListService, PagedAndSortedResultRequestDto, PagedResultDto } from '@abp/ng.core';
 import { IdentityRoleDto, IdentityRoleService } from '@abp/ng.identity/proxy';
 import { ePermissionManagementComponents } from '@abp/ng.permission-management';
-import { Confirmation, ConfirmationService } from '@abp/ng.theme.shared';
+import { Confirmation, ConfirmationService, ToasterService } from '@abp/ng.theme.shared';
 import {
   EXTENSIONS_IDENTIFIER,
   FormPropData,
   generateFormFromProps,
-} from '@abp/ng.theme.shared/extensions';
-import { Component, Injector, OnInit } from '@angular/core';
-import { FormGroup } from '@angular/forms';
+} from '@abp/ng.components/extensible';
+import { Component, inject, Injector, OnInit } from '@angular/core';
+import { UntypedFormGroup } from '@angular/forms';
 import { finalize } from 'rxjs/operators';
 import { eIdentityComponents } from '../../enums/components';
 
@@ -24,32 +24,31 @@ import { eIdentityComponents } from '../../enums/components';
   ],
 })
 export class RolesComponent implements OnInit {
+  protected readonly list = inject(ListService<PagedAndSortedResultRequestDto>);
+  protected readonly confirmationService = inject(ConfirmationService);
+  protected readonly toasterService = inject(ToasterService);
+  private readonly injector = inject(Injector);
+  protected readonly service = inject(IdentityRoleService);
+
   data: PagedResultDto<IdentityRoleDto> = { items: [], totalCount: 0 };
 
-  form: FormGroup;
+  form!: UntypedFormGroup;
 
-  selected: IdentityRoleDto;
+  selected?: IdentityRoleDto;
 
-  isModalVisible: boolean;
+  isModalVisible!: boolean;
 
   visiblePermissions = false;
 
-  providerKey: string;
+  providerKey?: string;
 
   modalBusy = false;
 
   permissionManagementKey = ePermissionManagementComponents.PermissionManagement;
 
-  onVisiblePermissionChange = event => {
+  onVisiblePermissionChange = (event: boolean) => {
     this.visiblePermissions = event;
   };
-
-  constructor(
-    public readonly list: ListService<PagedAndSortedResultRequestDto>,
-    protected confirmationService: ConfirmationService,
-    protected injector: Injector,
-    protected service: IdentityRoleService,
-  ) {}
 
   ngOnInit() {
     this.hookToQuery();
@@ -81,7 +80,7 @@ export class RolesComponent implements OnInit {
     if (!this.form.valid) return;
     this.modalBusy = true;
 
-    const { id } = this.selected;
+    const { id } = this.selected || {};
     (id
       ? this.service.update(id, { ...this.selected, ...this.form.value })
       : this.service.create(this.form.value)
@@ -89,6 +88,7 @@ export class RolesComponent implements OnInit {
       .pipe(finalize(() => (this.modalBusy = false)))
       .subscribe(() => {
         this.isModalVisible = false;
+        this.toasterService.success('AbpUi::SavedSuccessfully');
         this.list.get();
       });
   }
@@ -100,6 +100,7 @@ export class RolesComponent implements OnInit {
       })
       .subscribe((status: Confirmation.Status) => {
         if (status === Confirmation.Status.confirm) {
+          this.toasterService.success('AbpUi::DeletedSuccessfully');
           this.service.delete(id).subscribe(() => this.list.get());
         }
       });
@@ -116,7 +117,7 @@ export class RolesComponent implements OnInit {
     }, 0);
   }
 
-  sort(data) {
+  sort(data: any) {
     const { prop, dir } = data.sorts[0];
     this.list.sortKey = prop;
     this.list.sortOrder = dir;

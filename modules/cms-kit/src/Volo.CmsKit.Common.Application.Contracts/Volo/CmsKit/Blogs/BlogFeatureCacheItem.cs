@@ -1,12 +1,12 @@
 ﻿using System;
+using Volo.Abp.ObjectExtending;
 
-namespace Volo.CmsKit.Blogs
+namespace Volo.CmsKit.Blogs;
+
+[Serializable]
+public class BlogFeatureCacheItem : ExtensibleObject
 {
-    [Serializable]
-    public class BlogFeatureCacheItem
-    {
-        public Guid Id { get; set; }
-        public string FeatureName { get; set; }
-        public bool IsEnabled { get; set; }
-    }
+    public Guid Id { get; set; }
+    public string FeatureName { get; set; }
+    public bool IsEnabled { get; set; }
 }

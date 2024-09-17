@@ -8,6 +8,10 @@
     "FrameworkDocumentation": " Documentação do Framework",
     "OfficialBlog": "Blog oficial",
     "CommercialHomePage": "Página inicial comercial",
-    "CommercialSupportWebSite": "Site de suporte comercial"
+    "CommercialSupportWebSite": "Site de suporte comercial",
+    "CommunityWebSite": "Site da comunidade ABP",
+    "ManageAccount": "Minha conta | ABP.IO",
+    "ManageYourProfile": "Gerencie seu perfil",
+    "ReturnToApplication": "Voltar ao aplicativo"
   }
 }

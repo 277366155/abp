@@ -1,31 +1,38 @@
-﻿@page
-@using Microsoft.AspNetCore.Mvc.Localization
-@using Volo.CmsKit.Localization
-@using Volo.CmsKit.Public.Web.Pages.CmsKit.Shared.Components.Pages
+﻿@page "/cmskit/page"
 
+@addTagHelper *, Volo.Abp.AspNetCore.Mvc.UI.Bootstrap
+@using Volo.CmsKit.Contents
+@using Volo.CmsKit.Web.Pages.CmsKit.Components.Contents
 @model Volo.CmsKit.Public.Web.Pages.Public.CmsKit.Pages.IndexModel
-
-@inject IHtmlLocalizer<CmsKitResource> L
 
 @section styles{
     
     <abp-style src="/Pages/Public/CmsKit/Pages/index.css" />
-
-    <style>
-        @Html.Raw(Model.Page.Style)
-    </style>
+    @if (!Model.ViewModel.Style.IsNullOrEmpty())
+    {
+        <style>
+            @Html.Raw(Model.ViewModel.Style)
+        </style>
+    }
 }
 
 @section scripts{
-    <script>
-        @Html.Raw(Model.Page.Script)
-    </script>
+    @if (!Model.ViewModel.Script.IsNullOrEmpty())
+    {
+        <script>
+            @Html.Raw(Model.ViewModel.Script)
+        </script>
+    }
 }
 
-@await Component.InvokeAsync(typeof(DefaultPageViewComponent),
-    new
-    {
-        pageId = Model.Page.Id,
-        title = Model.Page.Title,
-        content = Model.Page.Content
-    })
+<abp-card>
+    <abp-card-body>
+        @(await Component.InvokeAsync(typeof(ContentFragmentViewComponent), new DefaultContentDto
+        {
+            ContentFragments = Model.ViewModel.ContentFragments,
+            PreventXSS = false,
+            AllowHtmlTags = true,
+        }))
+    </abp-card-body>
+</abp-card>
+

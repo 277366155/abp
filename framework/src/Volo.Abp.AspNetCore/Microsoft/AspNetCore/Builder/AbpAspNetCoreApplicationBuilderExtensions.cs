@@ -4,33 +4,35 @@ using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 
-namespace Microsoft.AspNetCore.Builder
+namespace Microsoft.AspNetCore.Builder;
+
+public static class AbpAspNetCoreApplicationBuilderExtensions
 {
-    public static class AbpAspNetCoreApplicationBuilderExtensions
+    /// <summary>
+    /// Maps endpoints configured with the <see cref="AbpEndpointRouterOptions"/>.
+    /// It internally uses the standard app.UseEndpoints(...) method.
+    /// </summary>
+    /// <param name="app">The application builder</param>
+    /// <param name="additionalConfigurationAction">Additional (and optional) endpoint configuration</param>
+    /// <returns></returns>
+    public static IApplicationBuilder UseConfiguredEndpoints(
+        this IApplicationBuilder app,
+        Action<IEndpointRouteBuilder>? additionalConfigurationAction = null)
     {
-        /// <summary>
-        /// Maps endpoints configured with the <see cref="AbpEndpointRouterOptions"/>.
-        /// It internally uses the standard app.UseEndpoints(...) method.
-        /// </summary>
-        /// <param name="app">The application builder</param>
-        /// <param name="additionalConfigurationAction">Additional (and optional) endpoint configuration</param>
-        /// <returns></returns>
-        public static IApplicationBuilder UseConfiguredEndpoints(
-            this IApplicationBuilder app,
-            Action<IEndpointRouteBuilder> additionalConfigurationAction = null)
+        var options = app.ApplicationServices
+            .GetRequiredService<IOptions<AbpEndpointRouterOptions>>()
+            .Value;
+
+        if (!options.EndpointConfigureActions.Any() && additionalConfigurationAction == null)
         {
-            var options = app.ApplicationServices
-                .GetRequiredService<IOptions<AbpEndpointRouterOptions>>()
-                .Value;
+            return app;
+        }
 
-            if (!options.EndpointConfigureActions.Any())
+        return app.UseEndpoints(endpoints =>
+        {
+            using (var scope = app.ApplicationServices.CreateScope())
             {
-                return app;
-            }
-
-            return app.UseEndpoints(endpoints =>
-            {
-                using (var scope = app.ApplicationServices.CreateScope())
+                if (options.EndpointConfigureActions.Any())
                 {
                     var context = new EndpointRouteBuilderContext(endpoints, scope.ServiceProvider);
 
@@ -38,10 +40,10 @@ namespace Microsoft.AspNetCore.Builder
                     {
                         configureAction(context);
                     }
-
-                    additionalConfigurationAction?.Invoke(endpoints);
                 }
-            });
-        }
+            }
+            
+            additionalConfigurationAction?.Invoke(endpoints);
+        });
     }
 }

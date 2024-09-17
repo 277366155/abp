@@ -1,52 +1,61 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.FileProviders;
 using Volo.Abp.VirtualFileSystem;
 
-namespace Volo.Abp.TextTemplating.VirtualFiles
+namespace Volo.Abp.TextTemplating.VirtualFiles;
+
+public class VirtualFolderLocalizedTemplateContentReader : ILocalizedTemplateContentReader
 {
-    public class VirtualFolderLocalizedTemplateContentReader : ILocalizedTemplateContentReader
+    private Dictionary<string, TemplateContentFileInfo> _dictionary = default!;
+    private readonly string[] _fileExtension;
+
+    public VirtualFolderLocalizedTemplateContentReader(string[] fileExtension)
     {
-        private Dictionary<string, string> _dictionary;
-        private readonly string[] _fileExtension;
+        _fileExtension = fileExtension;
+    }
 
-        public VirtualFolderLocalizedTemplateContentReader(string[] fileExtension)
+    public async Task ReadContentsAsync(
+        IVirtualFileProvider virtualFileProvider,
+        string virtualPath)
+    {
+        _dictionary = new Dictionary<string, TemplateContentFileInfo>();
+
+        var directoryContents = virtualFileProvider.GetDirectoryContents(virtualPath);
+        if (!directoryContents.Exists)
         {
-            _fileExtension = fileExtension;
+            throw new AbpException("Could not find a folder at the location: " + virtualPath);
         }
 
-        public async Task ReadContentsAsync(
-            IVirtualFileProvider virtualFileProvider,
-            string virtualPath)
+        foreach (var file in directoryContents)
         {
-            _dictionary = new Dictionary<string, string>();
-
-            var directoryContents = virtualFileProvider.GetDirectoryContents(virtualPath);
-            if (!directoryContents.Exists)
+            if (file.IsDirectory)
             {
-                throw new AbpException("Could not find a folder at the location: " + virtualPath);
+                continue;
             }
 
-            foreach (var file in directoryContents)
+            _dictionary.Add(file.Name.RemovePostFix(_fileExtension), new TemplateContentFileInfo()
             {
-                if (file.IsDirectory)
-                {
-                    continue;
-                }
+                FileName = file.Name,
+                FileContent = await file.ReadAsStringAsync()
+            });
+        }
+    }
 
-                _dictionary.Add(file.Name.RemovePostFix(_fileExtension), await file.ReadAsStringAsync());
-            }
+    public string? GetContentOrNull(string? cultureName)
+    {
+        if (cultureName == null)
+        {
+            return null;
         }
 
-        public string GetContentOrNull(string cultureName)
-        {
-            if (cultureName == null)
-            {
-                return null;
-            }
+        return _dictionary.GetOrDefault(cultureName)?.FileContent;
+    }
 
-            return _dictionary.GetOrDefault(cultureName);
-        }
+    public List<TemplateContentFileInfo> GetFiles()
+    {
+        return _dictionary.Values.ToList();
     }
 }

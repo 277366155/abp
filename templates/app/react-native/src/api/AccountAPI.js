@@ -3,21 +3,51 @@ import { getEnvVars } from '../../Environment';
 
 const { oAuthConfig } = getEnvVars();
 
-export const login = ({ username, password }) => {
-  return api({
+getLoginData = (username, password) => {
+  const formData = {
+    grant_type: 'password',
+    scope: oAuthConfig.scope,
+    username: username,
+    password: password,
+    client_id: oAuthConfig.clientId,
+  };
+
+  if (oAuthConfig.clientSecret)
+    formData['client_secret'] = oAuthConfig.clientSecret;
+
+  return Object.entries(formData)
+    .map(([key, value]) => `${key}=${encodeURIComponent(value)}`)
+    .join('&');
+};
+
+export const login = ({ username, password }) =>
+  api({
     method: 'POST',
     url: '/connect/token',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    data: `grant_type=password&scope=${oAuthConfig.scope}&username=${username}&password=${password}&client_id=${oAuthConfig.clientId}&client_secret=${oAuthConfig.clientSecret}`,
+    data: getLoginData(username, password),
     baseURL: oAuthConfig.issuer,
-  }).then(({ data }) => data)
-};
-
-export const logout = () =>
-  api({
-    method: 'GET',
-    url: '/api/account/logout',
   }).then(({ data }) => data);
+
+export const Logout = (
+  input = { client_id: '', token: '', token_type_hint: '' },
+) => {
+  if (!input.token_type_hint) {
+    input.token_type_hint = 'access_token';
+  }
+
+  const _data = Object.entries(input)
+    .map(([key, value]) => `${key}=${encodeURIComponent(value)}`)
+    .join('&');
+
+  return api({
+    method: 'POST',
+    url: '/connect/revocat',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    data: _data,
+    baseURL: oAuthConfig.issuer,
+  }).then(({ data }) => data);
+};
 
 export const getTenant = tenantName =>
   api({

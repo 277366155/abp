@@ -4,7 +4,7 @@ import { BehaviorSubject, Subject } from 'rxjs';
 
 @Injectable({ providedIn: 'root' })
 export class HttpErrorReporterService {
-  private _reporter$ = new Subject();
+  private _reporter$ = new Subject<HttpErrorResponse>();
   private _errors$ = new BehaviorSubject<HttpErrorResponse[]>([]);
 
   get reporter$() {
@@ -19,8 +19,8 @@ export class HttpErrorReporterService {
     return this._errors$.value;
   }
 
-  reportError = (error: HttpErrorResponse) => {
+  reportError(error: HttpErrorResponse) {
     this._reporter$.next(error);
     this._errors$.next([...this.errors, error]);
-  };
+  }
 }

@@ -1,20 +1,30 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using Volo.Abp.DependencyInjection;
 
-namespace Volo.Abp.SettingManagement.Web.Pages.SettingManagement
+namespace Volo.Abp.SettingManagement.Web.Pages.SettingManagement;
+
+public class SettingPageCreationContext : IServiceProviderAccessor
 {
-    public class SettingPageCreationContext : IServiceProviderAccessor
+    public IServiceProvider ServiceProvider { get; }
+
+    public List<SettingPageGroup> Groups { get; private set; }
+
+    public SettingPageCreationContext(IServiceProvider serviceProvider)
     {
-        public IServiceProvider ServiceProvider { get; }
+        ServiceProvider = serviceProvider;
 
-        public List<SettingPageGroup> Groups { get; }
+        Groups = new List<SettingPageGroup>();
+    }
+    
+    public void Normalize()
+    {
+        Order();
+    }
 
-        public SettingPageCreationContext(IServiceProvider serviceProvider)
-        {
-            ServiceProvider = serviceProvider;
-
-            Groups = new List<SettingPageGroup>();
-        }
+    private void Order()
+    {
+        Groups = Groups.OrderBy(item => item.Order).ThenBy(item => item.DisplayName).ToList();
     }
 }

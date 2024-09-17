@@ -1,29 +1,22 @@
 ﻿using System;
-using System.Runtime.Serialization;
 using Volo.Abp;
 
-namespace Volo.CmsKit.Blogs
+namespace Volo.CmsKit.Blogs;
+
+public class BlogPostSlugAlreadyExistException : BusinessException
 {
-    public class BlogPostSlugAlreadyExistException : BusinessException
+    public BlogPostSlugAlreadyExistException(Guid blogId, string slug)
     {
-        public BlogPostSlugAlreadyExistException(SerializationInfo serializationInfo, StreamingContext context)
-            : base(serializationInfo, context)
-        {
-        }
+        Slug = slug;
+        BlogId = blogId;
 
-        public BlogPostSlugAlreadyExistException(Guid blogId, string slug)
-        {
-            Slug = slug;
-            BlogId = blogId;
+        Code = CmsKitErrorCodes.BlogPosts.SlugAlreadyExist;
 
-            Code = CmsKitErrorCodes.BlogPosts.SlugAlreadyExist;
-
-            WithData(nameof(Slug), Slug);
-            WithData(nameof(BlogId), BlogId);
-        }
-
-        public virtual string Slug { get; }
-
-        public virtual Guid BlogId { get; }
+        WithData(nameof(Slug), Slug);
+        WithData(nameof(BlogId), BlogId);
     }
+
+    public virtual string Slug { get; }
+
+    public virtual Guid BlogId { get; }
 }

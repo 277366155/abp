@@ -19,7 +19,7 @@
     "SuccessfullyReIndexAllProject": "Successfully reindexed all projects",
     "InThisDocument": "In this document",
     "GoToTop": "Go to top",
-    "Projects": "Project(s)",
+    "Projects": "Projects",
     "NoProjectWarning": "There are no Projects yet!",
     "DocumentNotFound": "Oops, the requested document was not found!",
     "ProjectNotFound": "Oops, the requested project was not found!",
@@ -34,6 +34,7 @@
     "NewExplanation": "Created in the last two weeks.",
     "UpdatedExplanation": "Updated in the last two weeks.",
     "Volo.Docs.Domain:010002": "ShortName {ShortName} already exists.",
-    "Preview": "preview"
+    "Preview": "preview",
+    "GoogleTranslate": "Google Translate"
   }
 }

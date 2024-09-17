@@ -3,34 +3,45 @@ using Shouldly;
 using Volo.Abp.MultiTenancy;
 using Xunit;
 
-namespace Volo.Abp.TenantManagement
+namespace Volo.Abp.TenantManagement;
+
+public class TenantStore_Tests : AbpTenantManagementDomainTestBase
 {
-    public class TenantStore_Tests : AbpTenantManagementDomainTestBase
+    private readonly ITenantStore _tenantStore;
+    private readonly ITenantRepository _tenantRepository;
+    private readonly ITenantNormalizer _tenantNormalizer;
+
+    public TenantStore_Tests()
     {
-        private readonly ITenantStore _tenantStore;
-        private readonly ITenantRepository _tenantRepository;
+        _tenantStore = GetRequiredService<ITenantStore>();
+        _tenantRepository = GetRequiredService<ITenantRepository>();
+        _tenantNormalizer = GetRequiredService<ITenantNormalizer>();
+    }
 
-        public TenantStore_Tests()
-        {
-            _tenantStore = GetRequiredService<ITenantStore>();
-            _tenantRepository = GetRequiredService<ITenantRepository>();
-        }
+    [Fact]
+    public async Task FindAsyncByName()
+    {
+        var acme = await _tenantStore.FindAsync(_tenantNormalizer.NormalizeName("acme")!);
+        acme.ShouldNotBeNull();
+        acme.Name.ShouldBe("acme");
+        acme.NormalizedName.ShouldBe(_tenantNormalizer.NormalizeName("acme")!);
+    }
 
-        [Fact]
-        public async Task FindAsyncByName()
-        {
-            var acme = await _tenantStore.FindAsync("acme");
-            acme.ShouldNotBeNull();
-            acme.Name.ShouldBe("acme");
-        }
+    [Fact]
+    public async Task FindAsyncById()
+    {
+        var acme = await _tenantRepository.FindByNameAsync(_tenantNormalizer.NormalizeName("acme"));
+        acme.ShouldNotBeNull();
 
-        [Fact]
-        public async Task FindAsyncById()
-        {
-            var acme = await _tenantRepository.FindByNameAsync("acme");
-            acme.ShouldNotBeNull();
+        (await _tenantStore.FindAsync(acme.Id)).ShouldNotBeNull();
+    }
 
-             (await _tenantStore.FindAsync(acme.Id)).ShouldNotBeNull();
-        }
+    [Fact]
+    public async Task GetListAsync()
+    {
+        var tenants = await _tenantRepository.GetListAsync();
+
+        tenants.ShouldNotBeNull();
+        tenants.Count.ShouldBe(3);
     }
 }

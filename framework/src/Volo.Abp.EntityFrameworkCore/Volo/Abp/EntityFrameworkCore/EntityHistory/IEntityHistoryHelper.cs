@@ -1,13 +1,15 @@
 ﻿using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Volo.Abp.Auditing;
+using Volo.Abp.EntityFrameworkCore.ChangeTrackers;
 
-namespace Volo.Abp.EntityFrameworkCore.EntityHistory
+namespace Volo.Abp.EntityFrameworkCore.EntityHistory;
+
+public interface IEntityHistoryHelper
 {
-    public interface IEntityHistoryHelper
-    {
-        List<EntityChangeInfo> CreateChangeList(ICollection<EntityEntry> entityEntries);
+    void InitializeNavigationHelper(AbpEfCoreNavigationHelper abpEfCoreNavigationHelper);
 
-        void UpdateChangeList(List<EntityChangeInfo> entityChanges);
-    }
+    List<EntityChangeInfo> CreateChangeList(ICollection<EntityEntry> entityEntries);
+
+    void UpdateChangeList(List<EntityChangeInfo> entityChanges);
 }

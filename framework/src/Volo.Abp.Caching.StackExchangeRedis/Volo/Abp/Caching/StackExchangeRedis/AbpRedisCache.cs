@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Caching.Distributed;
@@ -10,328 +11,357 @@ using Microsoft.Extensions.Options;
 using StackExchange.Redis;
 using Volo.Abp.DependencyInjection;
 
-namespace Volo.Abp.Caching.StackExchangeRedis
+namespace Volo.Abp.Caching.StackExchangeRedis;
+
+[DisableConventionalRegistration]
+public class AbpRedisCache : RedisCache, ICacheSupportsMultipleItems
 {
-    [DisableConventionalRegistration]
-    public class AbpRedisCache : RedisCache, ICacheSupportsMultipleItems
+    protected static readonly string AbsoluteExpirationKey;
+    protected static readonly string SlidingExpirationKey;
+    protected static readonly string DataKey;
+    protected static readonly long NotPresent;
+    protected static readonly RedisValue[] HashMembersAbsoluteExpirationSlidingExpirationData;
+    protected static readonly RedisValue[] HashMembersAbsoluteExpirationSlidingExpiration;
+
+    private readonly static FieldInfo SetScriptField;
+    private readonly static FieldInfo RedisDatabaseField;
+    private readonly static MethodInfo ConnectMethod;
+    private readonly static MethodInfo ConnectAsyncMethod;
+    private readonly static MethodInfo MapMetadataMethod;
+    private readonly static MethodInfo GetAbsoluteExpirationMethod;
+    private readonly static MethodInfo GetExpirationInSecondsMethod;
+    private readonly static MethodInfo OnRedisErrorMethod;
+
+    protected RedisKey InstancePrefix { get; }
+
+    static AbpRedisCache()
     {
-        protected static readonly string SetScript;
-        protected static readonly string AbsoluteExpirationKey;
-        protected static readonly string SlidingExpirationKey;
-        protected static readonly string DataKey;
-        protected static readonly long NotPresent;
+        var type = typeof(RedisCache);
 
-        private static readonly FieldInfo RedisDatabaseField;
-        private static readonly MethodInfo ConnectMethod;
-        private static readonly MethodInfo ConnectAsyncMethod;
-        private static readonly MethodInfo MapMetadataMethod;
-        private static readonly MethodInfo GetAbsoluteExpirationMethod;
-        private static readonly MethodInfo GetExpirationInSecondsMethod;
+        RedisDatabaseField = Check.NotNull(type.GetField("_cache", BindingFlags.Instance | BindingFlags.NonPublic), nameof(RedisDatabaseField));
 
-        protected IDatabase RedisDatabase => GetRedisDatabase();
-        private IDatabase _redisDatabase;
+        SetScriptField = Check.NotNull(type.GetField("_setScript", BindingFlags.Instance | BindingFlags.NonPublic), nameof(SetScriptField));
+        
+        ConnectMethod = Check.NotNull(type.GetMethod("Connect", BindingFlags.Instance | BindingFlags.NonPublic), nameof(ConnectMethod));
 
-        protected string Instance { get; }
+        ConnectAsyncMethod = Check.NotNull(type.GetMethod("ConnectAsync", BindingFlags.Instance | BindingFlags.NonPublic), nameof(ConnectAsyncMethod));
 
-        static AbpRedisCache()
+        MapMetadataMethod = Check.NotNull(type.GetMethod("MapMetadata", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Static), nameof(MapMetadataMethod));
+
+        GetAbsoluteExpirationMethod = Check.NotNull(type.GetMethod("GetAbsoluteExpiration", BindingFlags.Static | BindingFlags.NonPublic), nameof(GetAbsoluteExpirationMethod));
+
+        GetExpirationInSecondsMethod = Check.NotNull(type.GetMethod("GetExpirationInSeconds", BindingFlags.Static | BindingFlags.NonPublic), nameof(GetExpirationInSecondsMethod));
+        
+        OnRedisErrorMethod = Check.NotNull(type.GetMethod("OnRedisError", BindingFlags.Instance | BindingFlags.NonPublic), nameof(OnRedisErrorMethod));
+
+        AbsoluteExpirationKey = type.GetField("AbsoluteExpirationKey", BindingFlags.Static | BindingFlags.NonPublic)!.GetValue(null)!.ToString()!;
+
+        SlidingExpirationKey = type.GetField("SlidingExpirationKey", BindingFlags.Static | BindingFlags.NonPublic)!.GetValue(null)!.ToString()!;
+
+        DataKey = type.GetField("DataKey", BindingFlags.Static | BindingFlags.NonPublic)!.GetValue(null)!.ToString()!;
+
+        NotPresent = type.GetField("NotPresent", BindingFlags.Static | BindingFlags.NonPublic)!.GetValue(null)!.To<int>();
+        
+        HashMembersAbsoluteExpirationSlidingExpirationData = [AbsoluteExpirationKey, SlidingExpirationKey, DataKey];
+        
+        HashMembersAbsoluteExpirationSlidingExpiration = [AbsoluteExpirationKey, SlidingExpirationKey];
+    }
+
+    public AbpRedisCache(IOptions<RedisCacheOptions> optionsAccessor)
+        : base(optionsAccessor)
+    {
+        var instanceName = optionsAccessor.Value.InstanceName;
+        if (!string.IsNullOrEmpty(instanceName))
         {
-            var type = typeof(RedisCache);
+            InstancePrefix = (RedisKey)Encoding.UTF8.GetBytes(instanceName);
+        }
+    }
 
-            RedisDatabaseField = type.GetField("_cache", BindingFlags.Instance | BindingFlags.NonPublic);
+    protected virtual IDatabase Connect()
+    { 
+        return (IDatabase)ConnectMethod.Invoke(this, Array.Empty<object>())!;
+    }
 
-            ConnectMethod = type.GetMethod("Connect", BindingFlags.Instance | BindingFlags.NonPublic);
+    protected virtual async ValueTask<IDatabase> ConnectAsync(CancellationToken token = default)
+    {
+        return await (ValueTask<IDatabase>)ConnectAsyncMethod.Invoke(this, new object[] { token })!;
+    }
 
-            ConnectAsyncMethod = type.GetMethod("ConnectAsync", BindingFlags.Instance | BindingFlags.NonPublic);
+    public byte[]?[] GetMany(
+        IEnumerable<string> keys)
+    {
+        keys = Check.NotNull(keys, nameof(keys));
 
-            MapMetadataMethod = type.GetMethod("MapMetadata", BindingFlags.Instance | BindingFlags.NonPublic);
+        return GetAndRefreshMany(keys, true);
+    }
 
-            GetAbsoluteExpirationMethod =
-                type.GetMethod("GetAbsoluteExpiration", BindingFlags.Static | BindingFlags.NonPublic);
+    public async Task<byte[]?[]> GetManyAsync(
+        IEnumerable<string> keys,
+        CancellationToken token = default)
+    {
+        keys = Check.NotNull(keys, nameof(keys));
 
-            GetExpirationInSecondsMethod =
-                type.GetMethod("GetExpirationInSeconds", BindingFlags.Static | BindingFlags.NonPublic);
+        return await GetAndRefreshManyAsync(keys, true, token);
+    }
 
-            SetScript = type.GetField("SetScript", BindingFlags.Static | BindingFlags.NonPublic)?.GetValue(null)
-                .ToString();
+    public void SetMany(
+        IEnumerable<KeyValuePair<string, byte[]>> items,
+        DistributedCacheEntryOptions options)
+    {
+        var cache = Connect();
 
-            AbsoluteExpirationKey = type.GetField("AbsoluteExpirationKey", BindingFlags.Static | BindingFlags.NonPublic)
-                ?.GetValue(null).ToString();
+        try
+        {
+            Task.WaitAll(PipelineSetMany(cache, items, options));
+        }
+        catch (Exception ex)
+        {
+            OnRedisError(ex, cache);
+            throw;
+        }
+    }
 
-            SlidingExpirationKey = type.GetField("SlidingExpirationKey", BindingFlags.Static | BindingFlags.NonPublic)
-                ?.GetValue(null).ToString();
+    public async Task SetManyAsync(
+        IEnumerable<KeyValuePair<string, byte[]>> items,
+        DistributedCacheEntryOptions options,
+        CancellationToken token = default)
+    {
+        token.ThrowIfCancellationRequested();
 
-            DataKey = type.GetField("DataKey", BindingFlags.Static | BindingFlags.NonPublic)?.GetValue(null).ToString();
+        var cache = await ConnectAsync(token);
 
-            // ReSharper disable once PossibleNullReferenceException
-            NotPresent = type.GetField("NotPresent", BindingFlags.Static | BindingFlags.NonPublic).GetValue(null)
-                .To<int>();
+        try
+        {
+            await Task.WhenAll(PipelineSetMany(cache, items, options));
+        }
+        catch (Exception ex)
+        {
+            OnRedisError(ex, cache);
+            throw;
+        }
+    }
+
+    public void RefreshMany(
+        IEnumerable<string> keys)
+    {
+        keys = Check.NotNull(keys, nameof(keys));
+
+        GetAndRefreshMany(keys, false);
+    }
+
+    public async Task RefreshManyAsync(
+        IEnumerable<string> keys,
+        CancellationToken token = default)
+    {
+        keys = Check.NotNull(keys, nameof(keys));
+
+        await GetAndRefreshManyAsync(keys, false, token);
+    }
+
+    public void RemoveMany(IEnumerable<string> keys)
+    {
+        keys = Check.NotNull(keys, nameof(keys));
+
+        var cache = Connect();
+
+        try
+        {
+            cache.KeyDelete(keys.Select(key => InstancePrefix.Append(key)).ToArray());
+        }
+        catch (Exception ex)
+        {
+            OnRedisError(ex, cache);
+            throw;
+        }
+    }
+
+    public async Task RemoveManyAsync(IEnumerable<string> keys, CancellationToken token = default)
+    {
+        keys = Check.NotNull(keys, nameof(keys));
+
+        token.ThrowIfCancellationRequested();
+        var cache = await ConnectAsync(token);
+
+        try
+        {
+            await cache.KeyDeleteAsync(keys.Select(key => InstancePrefix.Append(key)).ToArray());
+        }
+        catch (Exception ex)
+        {
+            OnRedisError(ex, cache);
+            throw;
+        }
+    }
+
+    protected virtual byte[]?[] GetAndRefreshMany(
+        IEnumerable<string> keys,
+        bool getData)
+    {
+       var cache = Connect();
+
+        var keyArray = keys.Select(key => InstancePrefix.Append( key)).ToArray();
+        byte[]?[] bytes;
+
+        try
+        {
+            var results = cache.HashMemberGetMany(keyArray, GetHashFields(getData));
+
+            Task.WaitAll(PipelineRefreshManyAndOutData(cache, keyArray, results, out bytes));
+        }
+        catch (Exception ex)
+        {
+            OnRedisError(ex, cache);
+            throw;
         }
 
-        public AbpRedisCache(IOptions<RedisCacheOptions> optionsAccessor)
-            : base(optionsAccessor)
-        {
-            Instance = optionsAccessor.Value.InstanceName ?? string.Empty;
-        }
+        return bytes;
+    }
 
-        protected virtual void Connect()
+    protected virtual async Task<byte[]?[]> GetAndRefreshManyAsync(
+        IEnumerable<string> keys,
+        bool getData,
+        CancellationToken token = default)
+    {
+        token.ThrowIfCancellationRequested();
+
+        var cache = await ConnectAsync(token);
+
+        var keyArray = keys.Select(key => InstancePrefix.Append(key)).ToArray();
+        byte[]?[] bytes;
+
+        try
         {
-            if (GetRedisDatabase() != null)
+            var results = await cache.HashMemberGetManyAsync(keyArray, GetHashFields(getData));
+            await Task.WhenAll(PipelineRefreshManyAndOutData(cache, keyArray, results, out bytes));
+        }
+        catch (Exception ex)
+        {
+            OnRedisError(ex, cache);
+            throw;
+        }
+        
+        return bytes;
+    }
+
+    protected virtual Task[] PipelineRefreshManyAndOutData(
+        IDatabase cache,
+        RedisKey[] keys,
+        RedisValue[][] results,
+        out byte[]?[] bytes)
+    {
+        bytes = new byte[keys.Length][];
+        var tasks = new Task[keys.Length];
+
+        for (var i = 0; i < keys.Length; i++)
+        {
+            if (results[i].Length >= 2)
             {
-                return;
-            }
+                MapMetadata(results[i], out var absExpr, out var sldExpr);
 
-            ConnectMethod.Invoke(this, Array.Empty<object>());
-        }
-
-        protected virtual Task ConnectAsync(CancellationToken token = default)
-        {
-            if (GetRedisDatabase() != null)
-            {
-                return Task.CompletedTask;
-            }
-
-            return (Task) ConnectAsyncMethod.Invoke(this, new object[] {token});
-        }
-
-        public byte[][] GetMany(
-            IEnumerable<string> keys)
-        {
-            keys = Check.NotNull(keys, nameof(keys));
-
-            return GetAndRefreshMany(keys, true);
-        }
-
-        public async Task<byte[][]> GetManyAsync(
-            IEnumerable<string> keys,
-            CancellationToken token = default)
-        {
-            keys = Check.NotNull(keys, nameof(keys));
-
-            return await GetAndRefreshManyAsync(keys, true, token);
-        }
-
-        public void SetMany(
-            IEnumerable<KeyValuePair<string, byte[]>> items,
-            DistributedCacheEntryOptions options)
-        {
-            Connect();
-
-            Task.WaitAll(PipelineSetMany(items, options));
-        }
-
-        public async Task SetManyAsync(
-            IEnumerable<KeyValuePair<string, byte[]>> items,
-            DistributedCacheEntryOptions options,
-            CancellationToken token = default)
-        {
-            token.ThrowIfCancellationRequested();
-
-            await ConnectAsync(token);
-
-            await Task.WhenAll(PipelineSetMany(items, options));
-        }
-
-        public void RefreshMany(
-            IEnumerable<string> keys)
-        {
-            keys = Check.NotNull(keys, nameof(keys));
-
-            GetAndRefreshMany(keys, false);
-        }
-
-        public async Task RefreshManyAsync(
-            IEnumerable<string> keys,
-            CancellationToken token = default)
-        {
-            keys = Check.NotNull(keys, nameof(keys));
-
-            await GetAndRefreshManyAsync(keys, false, token);
-        }
-
-        public void RemoveMany(IEnumerable<string> keys)
-        {
-            keys = Check.NotNull(keys, nameof(keys));
-
-            Connect();
-
-            RedisDatabase.KeyDelete(keys.Select(key => (RedisKey)(Instance + key)).ToArray());
-        }
-
-        public async Task RemoveManyAsync(IEnumerable<string> keys, CancellationToken token = default)
-        {
-            keys = Check.NotNull(keys, nameof(keys));
-
-            token.ThrowIfCancellationRequested();
-            await ConnectAsync(token);
-
-            await RedisDatabase.KeyDeleteAsync(keys.Select(key => (RedisKey)(Instance + key)).ToArray());
-        }
-
-        protected virtual byte[][] GetAndRefreshMany(
-            IEnumerable<string> keys,
-            bool getData)
-        {
-            Connect();
-
-            var keyArray = keys.Select(key => Instance + key).ToArray();
-            RedisValue[][] results;
-
-            if (getData)
-            {
-                results = RedisDatabase.HashMemberGetMany(keyArray, AbsoluteExpirationKey,
-                    SlidingExpirationKey, DataKey);
-            }
-            else
-            {
-                results = RedisDatabase.HashMemberGetMany(keyArray, AbsoluteExpirationKey,
-                    SlidingExpirationKey);
-            }
-
-            Task.WaitAll(PipelineRefreshManyAndOutData(keyArray, results, out var bytes));
-
-            return bytes;
-        }
-
-        protected virtual async Task<byte[][]> GetAndRefreshManyAsync(
-            IEnumerable<string> keys,
-            bool getData,
-            CancellationToken token = default)
-        {
-            token.ThrowIfCancellationRequested();
-
-            await ConnectAsync(token);
-
-            var keyArray = keys.Select(key => Instance + key).ToArray();
-            RedisValue[][] results;
-
-            if (getData)
-            {
-                results = await RedisDatabase.HashMemberGetManyAsync(keyArray, AbsoluteExpirationKey,
-                    SlidingExpirationKey, DataKey);
-            }
-            else
-            {
-                results = await RedisDatabase.HashMemberGetManyAsync(keyArray, AbsoluteExpirationKey,
-                    SlidingExpirationKey);
-            }
-
-            await Task.WhenAll(PipelineRefreshManyAndOutData(keyArray, results, out var bytes));
-
-            return bytes;
-        }
-
-        protected virtual Task[] PipelineRefreshManyAndOutData(
-            string[] keys,
-            RedisValue[][] results,
-            out byte[][] bytes)
-        {
-            bytes = new byte[keys.Length][];
-            var tasks = new Task[keys.Length];
-
-            for (var i = 0; i < keys.Length; i++)
-            {
-                if (results[i].Length >= 2)
+                if (sldExpr.HasValue)
                 {
-                    MapMetadata(results[i], out DateTimeOffset? absExpr, out TimeSpan? sldExpr);
+                    TimeSpan? expr;
 
-                    if (sldExpr.HasValue)
+                    if (absExpr.HasValue)
                     {
-                        TimeSpan? expr;
-
-                        if (absExpr.HasValue)
-                        {
-                            var relExpr = absExpr.Value - DateTimeOffset.Now;
-                            expr = relExpr <= sldExpr.Value ? relExpr : sldExpr;
-                        }
-                        else
-                        {
-                            expr = sldExpr;
-                        }
-
-                        tasks[i] = RedisDatabase.KeyExpireAsync(keys[i], expr);
+                        var relExpr = absExpr.Value - DateTimeOffset.Now;
+                        expr = relExpr <= sldExpr.Value ? relExpr : sldExpr;
                     }
                     else
                     {
-                        tasks[i] = Task.CompletedTask;
+                        expr = sldExpr;
                     }
-                }
 
-                if (results[i].Length >= 3 && results[i][2].HasValue)
-                {
-                    bytes[i] = results[i][2];
+                    tasks[i] = cache.KeyExpireAsync(keys[i], expr);
                 }
                 else
                 {
-                    bytes[i] = null;
+                    tasks[i] = Task.CompletedTask;
                 }
             }
 
-            return tasks;
+            if (results[i].Length >= 3 && results[i][2].HasValue)
+            {
+                bytes[i] = results[i][2];
+            }
+            else
+            {
+                bytes[i] = null;
+            }
         }
 
-        protected virtual Task[] PipelineSetMany(
-            IEnumerable<KeyValuePair<string, byte[]>> items,
-            DistributedCacheEntryOptions options)
+        return tasks;
+    }
+
+    protected virtual Task[] PipelineSetMany(
+        IDatabase cache,
+        IEnumerable<KeyValuePair<string, byte[]>> items,
+        DistributedCacheEntryOptions options)
+    {
+        items = Check.NotNull(items, nameof(items));
+        options = Check.NotNull(options, nameof(options));
+
+        var itemArray = items.ToArray();
+        var tasks = new Task[itemArray.Length];
+        var creationTime = DateTimeOffset.UtcNow;
+        var absoluteExpiration = GetAbsoluteExpiration(creationTime, options);
+
+        for (var i = 0; i < itemArray.Length; i++)
         {
-            items = Check.NotNull(items, nameof(items));
-            options = Check.NotNull(options, nameof(options));
-
-            var itemArray = items.ToArray();
-            var tasks = new Task[itemArray.Length];
-            var creationTime = DateTimeOffset.UtcNow;
-            var absoluteExpiration = GetAbsoluteExpiration(creationTime, options);
-
-            for (var i = 0; i < itemArray.Length; i++)
-            {
-                tasks[i] = RedisDatabase.ScriptEvaluateAsync(SetScript, new RedisKey[] {Instance + itemArray[i].Key},
-                    new RedisValue[]
-                    {
-                        absoluteExpiration?.Ticks ?? NotPresent,
+            tasks[i] = cache.ScriptEvaluateAsync(GetSetScript(), new RedisKey[] { InstancePrefix.Append(itemArray[i].Key) },
+            [
+                absoluteExpiration?.Ticks ?? NotPresent,
                         options.SlidingExpiration?.Ticks ?? NotPresent,
                         GetExpirationInSeconds(creationTime, absoluteExpiration, options) ?? NotPresent,
                         itemArray[i].Value
-                    });
-            }
-
-            return tasks;
+            ]);
         }
 
-        protected virtual void MapMetadata(
-            RedisValue[] results,
-            out DateTimeOffset? absoluteExpiration,
-            out TimeSpan? slidingExpiration)
-        {
-            var parameters = new object[] {results, null, null};
-            MapMetadataMethod.Invoke(this, parameters);
+        return tasks;
+    }
 
-            absoluteExpiration = (DateTimeOffset?) parameters[1];
-            slidingExpiration = (TimeSpan?) parameters[2];
-        }
+    protected virtual void MapMetadata(
+        RedisValue[] results,
+        out DateTimeOffset? absoluteExpiration,
+        out TimeSpan? slidingExpiration)
+    {
+        var parameters = new object?[] { results, null, null };
+        MapMetadataMethod.Invoke(this, parameters);
 
-        protected virtual long? GetExpirationInSeconds(
-            DateTimeOffset creationTime,
-            DateTimeOffset? absoluteExpiration,
-            DistributedCacheEntryOptions options)
-        {
-            return (long?) GetExpirationInSecondsMethod.Invoke(null,
-                new object[] {creationTime, absoluteExpiration, options});
-        }
+        absoluteExpiration = (DateTimeOffset?)parameters[1];
+        slidingExpiration = (TimeSpan?)parameters[2];
+    }
 
-        protected virtual DateTimeOffset? GetAbsoluteExpiration(
-            DateTimeOffset creationTime,
-            DistributedCacheEntryOptions options)
-        {
-            return (DateTimeOffset?) GetAbsoluteExpirationMethod.Invoke(null, new object[] {creationTime, options});
-        }
+    protected virtual long? GetExpirationInSeconds(
+        DateTimeOffset creationTime,
+        DateTimeOffset? absoluteExpiration,
+        DistributedCacheEntryOptions options)
+    {
+        return (long?)GetExpirationInSecondsMethod.Invoke(null,
+            new object?[] { creationTime, absoluteExpiration, options });
+    }
 
-        private IDatabase GetRedisDatabase()
-        {
-            if (_redisDatabase == null)
-            {
-                _redisDatabase = RedisDatabaseField.GetValue(this) as IDatabase;
-            }
-
-            return _redisDatabase;
-        }
+    protected virtual DateTimeOffset? GetAbsoluteExpiration(
+        DateTimeOffset creationTime,
+        DistributedCacheEntryOptions options)
+    {
+        return (DateTimeOffset?)GetAbsoluteExpirationMethod.Invoke(null, new object[] { creationTime, options });
+    }
+    
+    protected virtual void OnRedisError(Exception ex, IDatabase cache)
+    {
+        OnRedisErrorMethod.Invoke(this, [ex, cache]);
+    }
+    
+    private string GetSetScript()
+    {
+        return SetScriptField.GetValue(this)!.ToString()!;
+    }
+    
+    private static RedisValue[] GetHashFields(bool getData)
+    {
+        return getData
+            ? HashMembersAbsoluteExpirationSlidingExpirationData
+            : HashMembersAbsoluteExpirationSlidingExpiration;
     }
 }

@@ -1,30 +1,45 @@
 ﻿using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
+using NUglify.Helpers;
 
-namespace Volo.Abp.Account.Web.Pages.Account
+namespace Volo.Abp.Account.Web.Pages.Account;
+
+public class LoggedOutModel : AccountPageModel
 {
-    public class LoggedOutModel : AccountPageModel
+    [HiddenInput]
+    [BindProperty(SupportsGet = true)]
+    public string ClientName { get; set; }
+
+    [HiddenInput]
+    [BindProperty(SupportsGet = true)]
+    public string SignOutIframeUrl { get; set; }
+
+    [HiddenInput]
+    [BindProperty(SupportsGet = true)]
+    public string PostLogoutRedirectUri { get; set; }
+
+    public virtual async Task<IActionResult> OnGetAsync()
     {
-        [HiddenInput]
-        [BindProperty(SupportsGet = true)]
-        public string ClientName { get; set; }
+        await NormalizeUrlAsync();
+        return Page();
+    }
 
-        [HiddenInput]
-        [BindProperty(SupportsGet = true)]
-        public string SignOutIframeUrl { get; set; }
-
-        [HiddenInput]
-        [BindProperty(SupportsGet = true)]
-        public string PostLogoutRedirectUri { get; set; }
-
-        public virtual Task<IActionResult> OnGetAsync()
+    public virtual async Task<IActionResult> OnPostAsync()
+    {
+        await NormalizeUrlAsync();
+        return Page();
+    }
+    
+    protected virtual async Task NormalizeUrlAsync()
+    {
+        if (!PostLogoutRedirectUri.IsNullOrWhiteSpace())
         {
-            return Task.FromResult<IActionResult>(Page());
+            PostLogoutRedirectUri = Url.Content(await GetRedirectUrlAsync(PostLogoutRedirectUri));
         }
-
-        public virtual Task<IActionResult> OnPostAsync()
+        
+        if(!SignOutIframeUrl.IsNullOrWhiteSpace())
         {
-            return Task.FromResult<IActionResult>(Page());
+            SignOutIframeUrl = Url.Content(await GetRedirectUrlAsync(SignOutIframeUrl));
         }
     }
 }

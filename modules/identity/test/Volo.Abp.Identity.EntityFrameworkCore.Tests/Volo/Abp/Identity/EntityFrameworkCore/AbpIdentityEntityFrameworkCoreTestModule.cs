@@ -6,44 +6,46 @@ using Volo.Abp.EntityFrameworkCore;
 using Volo.Abp.EntityFrameworkCore.Sqlite;
 using Volo.Abp.Modularity;
 using Volo.Abp.PermissionManagement.EntityFrameworkCore;
+using Volo.Abp.Uow;
 
-namespace Volo.Abp.Identity.EntityFrameworkCore
+namespace Volo.Abp.Identity.EntityFrameworkCore;
+
+[DependsOn(
+    typeof(AbpIdentityTestBaseModule),
+    typeof(AbpPermissionManagementEntityFrameworkCoreModule),
+    typeof(AbpIdentityEntityFrameworkCoreModule),
+    typeof(AbpEntityFrameworkCoreSqliteModule)
+    )]
+public class AbpIdentityEntityFrameworkCoreTestModule : AbpModule
 {
-    [DependsOn(
-        typeof(AbpIdentityTestBaseModule),
-        typeof(AbpPermissionManagementEntityFrameworkCoreModule),
-        typeof(AbpIdentityEntityFrameworkCoreModule),
-        typeof(AbpEntityFrameworkCoreSqliteModule)
-        )]
-    public class AbpIdentityEntityFrameworkCoreTestModule : AbpModule
+    public override void ConfigureServices(ServiceConfigurationContext context)
     {
-        public override void ConfigureServices(ServiceConfigurationContext context)
-        {
-            var sqliteConnection = CreateDatabaseAndGetConnection();
+        var sqliteConnection = CreateDatabaseAndGetConnection();
 
-            Configure<AbpDbContextOptions>(options =>
+        Configure<AbpDbContextOptions>(options =>
+        {
+            options.Configure(abpDbContextConfigurationContext =>
             {
-                options.Configure(abpDbContextConfigurationContext =>
-                {
-                    abpDbContextConfigurationContext.DbContextOptions.UseSqlite(sqliteConnection);
-                });
+                abpDbContextConfigurationContext.DbContextOptions.UseSqlite(sqliteConnection);
             });
-        }
-        
-        private static SqliteConnection CreateDatabaseAndGetConnection()
-        {
-            var connection = new SqliteConnection("Data Source=:memory:");
-            connection.Open();
+        });
 
-            new IdentityDbContext(
-                new DbContextOptionsBuilder<IdentityDbContext>().UseSqlite(connection).Options
-            ).GetService<IRelationalDatabaseCreator>().CreateTables();
+        context.Services.AddAlwaysDisableUnitOfWorkTransaction();
+    }
 
-            new PermissionManagementDbContext(
-                new DbContextOptionsBuilder<PermissionManagementDbContext>().UseSqlite(connection).Options
-            ).GetService<IRelationalDatabaseCreator>().CreateTables();
+    private static SqliteConnection CreateDatabaseAndGetConnection()
+    {
+        var connection = new AbpUnitTestSqliteConnection("Data Source=:memory:");
+        connection.Open();
 
-            return connection;
-        }
+        new IdentityDbContext(
+            new DbContextOptionsBuilder<IdentityDbContext>().UseSqlite(connection).Options
+        ).GetService<IRelationalDatabaseCreator>().CreateTables();
+
+        new PermissionManagementDbContext(
+            new DbContextOptionsBuilder<PermissionManagementDbContext>().UseSqlite(connection).Options
+        ).GetService<IRelationalDatabaseCreator>().CreateTables();
+
+        return connection;
     }
 }

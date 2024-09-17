@@ -13,6 +13,9 @@
     "SavingWithThreeDot": "Guardando...",
     "Actions": "Opciones",
     "Delete": "Borrar",
+    "CreatedSuccessfully": "Creado con éxito",
+    "SavedSuccessfully": "Guardado con éxito",
+    "DeletedSuccessfully": "Eliminado con éxito",
     "Edit": "Editar",
     "Refresh": "Actualizar",
     "Language": "Idioma",
@@ -47,6 +50,15 @@
     "Search": "Buscar",
     "ItemWillBeDeletedMessageWithFormat": "{0} serán borrados!",
     "ItemWillBeDeletedMessage": "Este elemento será borrado",
-    "ManageYourAccount": "Administrar cuenta"
+    "ManageYourAccount": "Administrar cuenta",
+    "OthersGroup": "Otra",
+    "Today": "Hoy",
+    "Apply": "Aplicar",
+    "InternetConnectionInfo": "No se pudo realizar la operación. Tu conexión a Internet no está disponible en este momento.",
+    "CopiedToTheClipboard": "Copiado al portapapeles",
+    "AddNew": "Agregar nuevo",
+    "ProfilePicture": "Foto de perfil",
+    "Theme": "Tema",
+    "NotAssigned": "No asignado"
   }
 }

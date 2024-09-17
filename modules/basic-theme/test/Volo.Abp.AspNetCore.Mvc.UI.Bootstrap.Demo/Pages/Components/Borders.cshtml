@@ -1,20 +1,8 @@
 ﻿@page
+@using Volo.Abp.AspNetCore.Mvc.UI.Bootstrap.Demo
 @model Volo.Abp.AspNetCore.Mvc.UI.Bootstrap.Demo.Pages.Components.BordersModel
 @{
     ViewData["Title"] = "Borders";
-}
-
-@section styles {
-    <abp-style-bundle>
-        <abp-style src="/css/demo.css" />
-    </abp-style-bundle>
-}
-
-@section scripts {
-    <abp-script-bundle>
-        @*<abp-script src="/libs/highlight.js/lib/highlight.js" />
-            <abp-script src="/Pages/Components/highlightCode.js" />*@
-    </abp-script-bundle>
 }
 
 <style>
@@ -27,14 +15,9 @@
     }
 </style>
 
-<link rel="stylesheet"
-      href="http://cdnjs.cloudflare.com/ajax/libs/highlight.js/9.13.1/styles/default.min.css">
-<script src="http://cdnjs.cloudflare.com/ajax/libs/highlight.js/9.13.1/highlight.min.js"></script>
-<script>hljs.initHighlightingOnLoad();</script>
-
 <h2>Borders</h2>
 
-<p>Based on <a href="https://getbootstrap.com/docs/4.1/utilities/borders/" target="_blank"> Bootstrap Border</a>.</p>
+<p>Based on <a href="@BootstrapUrlHelper.GetDocUrl("utilities/borders")" target="_blank"> Bootstrap Border</a>.</p>
 
 <h4>Border</h4>
 
@@ -63,9 +46,9 @@
                 <pre><code>
 &lt;span class=&quot;border&quot;&gt;&lt;/span&gt;
 &lt;span class=&quot;border-top&quot;&gt;&lt;/span&gt;
-&lt;span class=&quot;border-right&quot;&gt;&lt;/span&gt;
+&lt;span class=&quot;border-end&quot;&gt;&lt;/span&gt;
 &lt;span class=&quot;border-bottom&quot;&gt;&lt;/span&gt;
-&lt;span class=&quot;border-left&quot;&gt;&lt;/span&gt;
+&lt;span class=&quot;border-start&quot;&gt;&lt;/span&gt;
 </code></pre>
             </abp-tab>
         </abp-tabs>
@@ -97,9 +80,9 @@
                 <pre><code>
 &lt;span class=&quot;borde-0&quot;&gt;&lt;/span&gt;
 &lt;span class=&quot;border-top-0&quot;&gt;&lt;/span&gt;
-&lt;span class=&quot;border-right-0&quot;&gt;&lt;/span&gt;
+&lt;span class=&quot;border-end-0&quot;&gt;&lt;/span&gt;
 &lt;span class=&quot;border-bottom-0&quot;&gt;&lt;/span&gt;
-&lt;span class=&quot;border-left-0&quot;&gt;&lt;/span&gt;
+&lt;span class=&quot;border-start-0&quot;&gt;&lt;/span&gt;
 </code></pre>
             </abp-tab>
         </abp-tabs>
@@ -163,14 +146,14 @@
 &lt;span class=&quot;border border-dark&quot;&gt;&lt;/span&gt;
 &lt;span class=&quot;border border-white&quot;&gt;&lt;/span&gt;
 &lt;br/&gt;
-&lt;span class=&quot;border border-left border-primary&quot;&gt;&lt;/span&gt;
+&lt;span class=&quot;border border-start border-primary&quot;&gt;&lt;/span&gt;
 &lt;span class=&quot;border border-top border-secondary&quot;&gt;&lt;/span&gt;
-&lt;span class=&quot;border border-right border-success&quot;&gt;&lt;/span&gt;
+&lt;span class=&quot;border border-end border-success&quot;&gt;&lt;/span&gt;
 &lt;span class=&quot;border border-bottom border-danger&quot;&gt;&lt;/span&gt;
 &lt;span class=&quot;border border-bottom border-warning&quot;&gt;&lt;/span&gt;
-&lt;span class=&quot;border border-left border-info&quot;&gt;&lt;/span&gt;
+&lt;span class=&quot;border border-start border-info&quot;&gt;&lt;/span&gt;
 &lt;span class=&quot;border border-top border-light&quot;&gt;&lt;/span&gt;
-&lt;span class=&quot;border border-right border-dark&quot;&gt;&lt;/span&gt;
+&lt;span class=&quot;border border-end border-dark&quot;&gt;&lt;/span&gt;
 </code></pre>
             </abp-tab>
         </abp-tabs>
@@ -205,9 +188,9 @@
 &lt;span class=&quot;border border-primary rounded&quot;&gt;&lt;/span&gt;
 &lt;span class=&quot;border border-primary rounded-0&quot;&gt;&lt;/span&gt;
 &lt;span class=&quot;border border-primary rounded-top&quot;&gt;&lt;/span&gt;
-&lt;span class=&quot;border border-primary rounded-left&quot;&gt;&lt;/span&gt;
+&lt;span class=&quot;border border-primary rounded-start&quot;&gt;&lt;/span&gt;
 &lt;span class=&quot;border border-primary rounded-bottom&quot;&gt;&lt;/span&gt;
-&lt;span class=&quot;border border-primary rounded-right&quot;&gt;&lt;/span&gt;
+&lt;span class=&quot;border border-primary rounded-end&quot;&gt;&lt;/span&gt;
 </code></pre>
             </abp-tab>
         </abp-tabs>

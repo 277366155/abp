@@ -21,7 +21,7 @@ import { PagedResultDto } from '../models/dtos';
 import { LIST_QUERY_DEBOUNCE_TIME } from '../tokens/list.token';
 
 @Injectable()
-export class ListService<QueryParamsType = ABP.PageQueryParams> implements OnDestroy {
+export class ListService<QueryParamsType = ABP.PageQueryParams | any> implements OnDestroy {
   private _filter = '';
   set filter(value: string) {
     this._filter = value;
@@ -52,6 +52,17 @@ export class ListService<QueryParamsType = ABP.PageQueryParams> implements OnDes
     return this._page;
   }
 
+  private _totalCount = 0;
+  set totalCount(value: number) {
+    if (value === this._totalCount) return;
+
+    this._totalCount = value;
+    this.get();
+  }
+  get totalCount(): number {
+    return this._totalCount;
+  }
+
   private _sortKey = '';
   set sortKey(value: string) {
     this._sortKey = value;
@@ -80,7 +91,7 @@ export class ListService<QueryParamsType = ABP.PageQueryParams> implements OnDes
 
   private _isLoading$ = new BehaviorSubject(false);
 
-  private destroy$ = new Subject();
+  private destroy$ = new Subject<void>();
 
   private delay: MonoTypeOperatorFunction<QueryParamsType>;
 
@@ -103,16 +114,15 @@ export class ListService<QueryParamsType = ABP.PageQueryParams> implements OnDes
     this.get();
   }
 
-  hookToQuery<T extends any>(
+  hookToQuery<T>(
     streamCreatorCallback: QueryStreamCreatorCallback<T, QueryParamsType>,
   ): Observable<PagedResultDto<T>> {
-    this._isLoading$.next(true);
-
     return this.query$.pipe(
+      tap(() => this._isLoading$.next(true)),
       switchMap(query => streamCreatorCallback(query).pipe(catchError(() => of(null)))),
       filter(Boolean),
       tap(() => this._isLoading$.next(false)),
-      shareReplay({ bufferSize: 1, refCount: true }),
+      shareReplay<any>({ bufferSize: 1, refCount: true }),
       takeUntil(this.destroy$),
     );
   }
@@ -122,12 +132,18 @@ export class ListService<QueryParamsType = ABP.PageQueryParams> implements OnDes
   }
 
   private resetPageWhenUnchanged() {
+    const maxPage = Number(Number(this.totalCount / this._maxResultCount).toFixed());
     const skipCount = this._page * this._maxResultCount;
 
-    if (skipCount === this._skipCount) {
-      this._page = 0;
-      this._skipCount = 0;
-    } else this._skipCount = skipCount;
+    if (skipCount !== this._totalCount) {
+      this._skipCount = skipCount;
+      return;
+    }
+
+    if (this.page === maxPage && this.page > 0) {
+      this._skipCount = skipCount - this._maxResultCount;
+      this.page = this.page - 1;
+    }
   }
 
   private next() {

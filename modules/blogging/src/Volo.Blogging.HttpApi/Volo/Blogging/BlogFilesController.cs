@@ -8,7 +8,7 @@ using Volo.Blogging.Files;
 namespace Volo.Blogging
 {
     [RemoteService(Name = BloggingRemoteServiceConsts.RemoteServiceName)]
-    [Area("blogging")]
+    [Area(BloggingRemoteServiceConsts.ModuleName)]
     [Route("api/blogging/files")]
     public class BlogFilesController : AbpControllerBase, IFileAppService
     {
@@ -28,7 +28,7 @@ namespace Volo.Blogging
 
         [HttpGet]
         [Route("www/{name}")]
-        public async Task<IRemoteStreamContent> GetFileAsync(string name)
+        public virtual async Task<IRemoteStreamContent> GetFileAsync(string name)
         {
             return await _fileAppService.GetFileAsync(name);
         }

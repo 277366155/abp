@@ -1,24 +1,34 @@
-﻿namespace Volo.Abp.AspNetCore.Mvc.ApplicationConfigurations
+﻿namespace Volo.Abp.AspNetCore.Mvc.ApplicationConfigurations;
+
+public class TimingDto
 {
-    public class TimingDto
-    {
-        public TimeZone TimeZone { get; set; }
-    }
+    public TimeZone TimeZone { get; set; }
 
-    public class TimeZone
+    public TimingDto()
     {
-        public IanaTimeZone Iana { get; set; }
-
-        public WindowsTimeZone Windows { get; set; }
+        TimeZone = new TimeZone();
     }
+}
 
-    public class WindowsTimeZone
+public class TimeZone
+{
+    public IanaTimeZone Iana { get; set; }
+
+    public WindowsTimeZone Windows { get; set; }
+
+    public TimeZone()
     {
-        public string TimeZoneId { get; set; }
+        Iana = new IanaTimeZone();
+        Windows = new WindowsTimeZone();
     }
+}
 
-    public class IanaTimeZone
-    {
-        public string TimeZoneName { get; set; }
-    }
+public class WindowsTimeZone
+{
+    public string? TimeZoneId { get; set; }
+}
+
+public class IanaTimeZone
+{
+    public string? TimeZoneName { get; set; }
 }

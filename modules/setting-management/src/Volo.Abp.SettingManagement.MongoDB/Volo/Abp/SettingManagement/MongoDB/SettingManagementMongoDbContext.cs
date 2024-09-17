@@ -3,19 +3,19 @@ using Volo.Abp.Data;
 using Volo.Abp.MongoDB;
 using Volo.Abp.MultiTenancy;
 
-namespace Volo.Abp.SettingManagement.MongoDB
+namespace Volo.Abp.SettingManagement.MongoDB;
+
+[IgnoreMultiTenancy]
+[ConnectionStringName(AbpSettingManagementDbProperties.ConnectionStringName)]
+public class SettingManagementMongoDbContext : AbpMongoDbContext, ISettingManagementMongoDbContext
 {
-    [IgnoreMultiTenancy]
-    [ConnectionStringName(AbpSettingManagementDbProperties.ConnectionStringName)]
-    public class SettingManagementMongoDbContext : AbpMongoDbContext, ISettingManagementMongoDbContext
+    public IMongoCollection<Setting> Settings => Collection<Setting>();
+    public IMongoCollection<SettingDefinitionRecord> SettingDefinitionRecords => Collection<SettingDefinitionRecord>();
+
+    protected override void CreateModel(IMongoModelBuilder modelBuilder)
     {
-        public IMongoCollection<Setting> Settings => Collection<Setting>();
+        base.CreateModel(modelBuilder);
 
-        protected override void CreateModel(IMongoModelBuilder modelBuilder)
-        {
-            base.CreateModel(modelBuilder);
-
-            modelBuilder.ConfigureSettingManagement();
-        }
+        modelBuilder.ConfigureSettingManagement();
     }
 }

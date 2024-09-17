@@ -1,14 +1,20 @@
 ﻿using Slugify;
 using Unidecode.NET;
 
-namespace Volo.CmsKit
+namespace Volo.CmsKit;
+
+public static class SlugNormalizer
 {
-    public static class SlugNormalizer
+    static readonly SlugHelper SlugHelper = new(new SlugHelperConfiguration
     {
-        static readonly SlugHelper SlugHelper = new ();
-        public static string Normalize(string value)
+        AllowedChars =
         {
-            return SlugHelper.GenerateSlug(value?.Unidecode());
+            '/'
         }
+    });
+
+    public static string Normalize(string value)
+    {
+        return SlugHelper.GenerateSlug(value?.Unidecode()).Trim('/');
     }
 }

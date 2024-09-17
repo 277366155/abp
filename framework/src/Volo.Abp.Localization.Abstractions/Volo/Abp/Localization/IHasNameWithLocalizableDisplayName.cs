@@ -1,13 +1,11 @@
 ﻿using JetBrains.Annotations;
 
-namespace Volo.Abp.Localization
-{
-    public interface IHasNameWithLocalizableDisplayName
-    {
-        [NotNull]
-        public string Name { get; }
+namespace Volo.Abp.Localization;
 
-        [CanBeNull]
-        public ILocalizableString DisplayName { get; }
-    }
+public interface IHasNameWithLocalizableDisplayName
+{
+    [NotNull]
+    public string Name { get; }
+
+    public ILocalizableString? DisplayName { get; }
 }

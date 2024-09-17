@@ -96,21 +96,36 @@ $.validator.defaults.ignore = ''; //TODO: Would be better if we can apply only f
                 });
 
                 _$modal.on('shown.bs.modal', function () {
-                    //focuses first element if it's a typeable input.
-                    var $firstVisibleInput = _$modal.find('input:not([type=hidden]):first');
-
-                    _onOpenCallbacks.triggerAll(_publicApi);
-
-                    if ($firstVisibleInput.hasClass("datepicker")) {
-                        return; //don't pop-up date pickers...
+                    var modalBackdrop = $('.modal-backdrop').last();
+                    if (modalBackdrop) {
+                        var zIndex = parseInt(_$modal.css('z-index'));
+                        if (!isNaN(zIndex)) {
+                            modalBackdrop.css("z-index", zIndex - 1);
+                        }
                     }
 
-                    var focusableInputs = ["text", "password", "email", "number", "search", "tel", "url"];
-                    if (!focusableInputs.includes($firstVisibleInput.prop("type"))) {
-                        return;
-                    }
+                    if (!options.focusElement) {
+                        //focuses first element if it's a typeable input.
+                        var $firstVisibleInput = _$modal.find('input:not([type=hidden]):first');
 
-                    $firstVisibleInput.focus();
+                        _onOpenCallbacks.triggerAll(_publicApi);
+
+                        if ($firstVisibleInput.data("datepicker")) {
+                            return; //don't pop-up date pickers...
+                        }
+
+                        var focusableInputs = ["text", "password", "email", "number", "search", "tel", "url"];
+                        if (!focusableInputs.includes($firstVisibleInput.prop("type"))) {
+                            return;
+                        }
+
+                        $firstVisibleInput.focus();
+                    } else if (typeof options.focusElement === 'function') {
+                        var focusElement = options.focusElement();
+                        focusElement.focus();
+                    } else if (typeof options.focusElement === 'string') {
+                        $(options.focusElement).focus();
+                    }
                 });
 
                 var modalClass = abp.modals[options.modalClass];
@@ -120,6 +135,12 @@ $.validator.defaults.ignore = ''; //TODO: Would be better if we can apply only f
                     _modalObject.initModal && _modalObject.initModal(_publicApi, _args);
                 }
 
+                var modalCount = $('.modal').length;
+                var zIndex = parseInt(_$modal.css('z-index'));
+                if (!isNaN(zIndex)) {
+                    _$modal.css("z-index", zIndex + modalCount - 1);
+                }
+
                 _$modal.modal('show');
             };
 
@@ -127,10 +148,18 @@ $.validator.defaults.ignore = ''; //TODO: Would be better if we can apply only f
 
                 _args = args || {};
 
+                var argsWithoutFunc = {};
+                for (var a in _args) {
+                    if (_args.hasOwnProperty(a) && typeof _args[a] !== 'function') {
+                        argsWithoutFunc[a] = _args[a];
+                    }
+                }
+
                 _createContainer(_modalId)
-                    .load(options.viewUrl, $.param(_args), function (response, status, xhr) {
+                    .load(options.viewUrl, $.param(argsWithoutFunc), function (response, status, xhr) {
                         if (status === "error") {
-                            //TODO: Handle!
+                            var responseJSON = xhr.responseJSON ? xhr.responseJSON : JSON.parse(xhr.responseText);
+                            abp.ajax.showError(responseJSON.error ? responseJSON.error : abp.ajax.defaultError);
                             return;
                         };
 

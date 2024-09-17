@@ -1,61 +1,62 @@
 ﻿using System;
 using System.Linq;
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Mvc.ApplicationModels;
-using Microsoft.AspNetCore.Mvc.Versioning;
+using Asp.Versioning;
+using Asp.Versioning.ApplicationModels;
 using Volo.Abp.ApiVersioning;
 using Volo.Abp.AspNetCore.Mvc;
 using Volo.Abp.AspNetCore.Mvc.Conventions;
 using Volo.Abp.AspNetCore.Mvc.Versioning;
 
-namespace Microsoft.Extensions.DependencyInjection
+namespace Microsoft.Extensions.DependencyInjection;
+
+public static class AbpApiVersioningExtensions
 {
-    public static class AbpApiVersioningExtensions
+    public static IApiVersioningBuilder AddAbpApiVersioning(
+        this IServiceCollection services,
+        Action<ApiVersioningOptions>? apiVersioningOptionsSetupAction = null,
+        Action<MvcApiVersioningOptions>? mvcApiVersioningOptionsSetupAction = null)
     {
-        public static IServiceCollection AddAbpApiVersioning(this IServiceCollection services, Action<ApiVersioningOptions> setupAction)
+        services.AddTransient<IRequestedApiVersion, HttpContextRequestedApiVersion>();
+        services.AddTransient<IApiControllerSpecification, AbpConventionalApiControllerSpecification>();
+
+        apiVersioningOptionsSetupAction ??= _ => { };
+        mvcApiVersioningOptionsSetupAction ??= _ => { };
+        return services.AddApiVersioning(apiVersioningOptionsSetupAction).AddMvc(mvcApiVersioningOptionsSetupAction);
+    }
+
+    public static void ConfigureAbp(this MvcApiVersioningOptions options, AbpAspNetCoreMvcOptions mvcOptions)
+    {
+        foreach (var setting in mvcOptions.ConventionalControllers.ConventionalControllerSettings)
         {
-            services.AddTransient<IRequestedApiVersion, HttpContextRequestedApiVersion>();
-            services.AddTransient<IApiControllerSpecification, AbpConventionalApiControllerSpecification>();
-
-            services.AddApiVersioning(setupAction);
-
-            return services;
-        }
-
-        public static void ConfigureAbp(this ApiVersioningOptions options, AbpAspNetCoreMvcOptions mvcOptions)
-        {
-            foreach (var setting in mvcOptions.ConventionalControllers.ConventionalControllerSettings)
+            if (setting.MvcApiVersioningConfigurer == null)
             {
-                if (setting.ApiVersionConfigurer == null)
-                {
-                    ConfigureApiVersionsByConvention(options, setting);
-                }
-                else
-                {
-                    setting.ApiVersionConfigurer.Invoke(options);
-                }
+                ConfigureApiVersionsByConvention(options, setting);
+            }
+            else
+            {
+                setting.MvcApiVersioningConfigurer.Invoke(options);
             }
         }
+    }
 
-        private static void ConfigureApiVersionsByConvention(ApiVersioningOptions options, ConventionalControllerSetting setting)
+    private static void ConfigureApiVersionsByConvention(MvcApiVersioningOptions options, ConventionalControllerSetting setting)
+    {
+        foreach (var controllerType in setting.ControllerTypes)
         {
-            foreach (var controllerType in setting.ControllerTypes)
-            {
-                var controllerBuilder = options.Conventions.Controller(controllerType);
+            var controllerBuilder = options.Conventions.Controller(controllerType);
 
-                if (setting.ApiVersions.Any())
+            if (setting.ApiVersions.Any())
+            {
+                foreach (var apiVersion in setting.ApiVersions)
                 {
-                    foreach (var apiVersion in setting.ApiVersions)
-                    {
-                        controllerBuilder.HasApiVersion(apiVersion);
-                    }
+                    controllerBuilder.HasApiVersion(apiVersion);
                 }
-                else
+            }
+            else
+            {
+                if (!controllerType.IsDefined(typeof(ApiVersionAttribute), true))
                 {
-                    if (!controllerType.IsDefined(typeof(ApiVersionAttribute), true))
-                    {
-                        controllerBuilder.IsApiVersionNeutral();
-                    }
+                    controllerBuilder.IsApiVersionNeutral();
                 }
             }
         }

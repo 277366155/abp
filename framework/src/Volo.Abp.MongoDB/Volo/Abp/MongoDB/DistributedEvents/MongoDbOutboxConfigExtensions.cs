@@ -1,13 +1,14 @@
-﻿using Volo.Abp.EventBus.Distributed;
+﻿using Volo.Abp.Data;
+using Volo.Abp.EventBus.Distributed;
 
-namespace Volo.Abp.MongoDB.DistributedEvents
+namespace Volo.Abp.MongoDB.DistributedEvents;
+
+public static class MongoDbOutboxConfigExtensions
 {
-    public static class MongoDbOutboxConfigExtensions
+    public static void UseMongoDbContext<TMongoDbContext>(this OutboxConfig outboxConfig)
+        where TMongoDbContext : IHasEventOutbox
     {
-        public static void UseMongoDbContext<TMongoDbContext>(this OutboxConfig outboxConfig)
-            where TMongoDbContext : IHasEventOutbox
-        {
-            outboxConfig.ImplementationType = typeof(IMongoDbContextEventOutbox<TMongoDbContext>);
-        }
+        outboxConfig.ImplementationType = typeof(IMongoDbContextEventOutbox<TMongoDbContext>);
+        outboxConfig.DatabaseName = ConnectionStringNameAttribute.GetConnStringName<TMongoDbContext>();
     }
 }

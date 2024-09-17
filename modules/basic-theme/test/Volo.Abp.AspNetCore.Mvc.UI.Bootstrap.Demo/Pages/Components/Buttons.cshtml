@@ -1,31 +1,13 @@
 ﻿@page
+@using Volo.Abp.AspNetCore.Mvc.UI.Bootstrap.Demo
 @model Volo.Abp.AspNetCore.Mvc.UI.Bootstrap.Demo.Pages.Components.ButtonsModel
 @{
     ViewData["Title"] = "Buttons";
 }
 
-@section styles {
-    <abp-style-bundle>
-        <abp-style src="/css/demo.css" />
-        <abp-style src="/libs/highlight.js/styles/default.css" />
-    </abp-style-bundle>
-}
-
-@section scripts {
-    <abp-script-bundle>
-        @*<abp-script src="/libs/highlight.js/lib/highlight.js" />
-            <abp-script src="/Pages/Components/highlightCode.js" />*@
-    </abp-script-bundle>
-}
-
-<link rel="stylesheet"
-      href="http://cdnjs.cloudflare.com/ajax/libs/highlight.js/9.13.1/styles/default.min.css">
-<script src="http://cdnjs.cloudflare.com/ajax/libs/highlight.js/9.13.1/highlight.min.js"></script>
-<script>hljs.initHighlightingOnLoad();</script>
-
 <h2>Buttons</h2>
 
-<p>Based on <a href="http://getbootstrap.com/docs/4.1/components/buttons/" target="_blank"> Bootstrap button</a>.</p>
+<p>Based on <a href="@BootstrapUrlHelper.GetDocUrl("components/buttons")" target="_blank"> Bootstrap button</a>.</p>
 
 <h4>Examples</h4>
 
@@ -198,30 +180,6 @@
                 <pre><code>
 &lt;button type=&quot;button&quot; class=&quot;btn btn-primary btn-sm&quot;&gt;Small button&lt;/button&gt;
 &lt;button type=&quot;button&quot; class=&quot;btn btn-secondary btn-sm&quot;&gt;Small button&lt;/button&gt;
-</code></pre>
-            </abp-tab>
-        </abp-tabs>
-    </div>
-</div>
-
-
-<div class="demo-with-code">
-    <div class="demo-area">
-        <abp-button size="Block" button-type="Primary" text="Block level button" />
-        <abp-button size="Block" button-type="Secondary" text="Block level button" />
-    </div>
-    <div class="code-area">
-        <abp-tabs>
-            <abp-tab title="Tag Helper">
-                <pre><code>
-&lt;abp-button size=&quot;Block&quot; button-type=&quot;Primary&quot; text=&quot;Block level button&quot; /&gt;
-&lt;abp-button size=&quot;Block&quot; button-type=&quot;Secondary&quot; text=&quot;Block level button&quot; /&gt;
-</code></pre>
-            </abp-tab>
-            <abp-tab title="Rendered">
-                <pre><code>
-&lt;button type=&quot;button&quot; class=&quot;btn btn-primary btn-lg btn-block&quot;&gt;Block level button&lt;/button&gt;
-&lt;button type=&quot;button&quot; class=&quot;btn btn-secondary btn-lg btn-block&quot;&gt;Block level button&lt;/button&gt;
 </code></pre>
             </abp-tab>
         </abp-tabs>

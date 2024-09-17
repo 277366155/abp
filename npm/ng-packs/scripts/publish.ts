@@ -11,7 +11,8 @@ program
   )
   .option('-r, --registry <registry>', 'target npm server registry')
   .option('-p, --preview', 'publishes with preview tag')
-  .option('-g, --skipGit', 'skips git push');
+  .option('-sg, --skipGit', 'skips git push')
+  .option('-sv, --skipVersionValidation', 'skips version validation');
 
 program.parse(process.argv);
 
@@ -30,9 +31,19 @@ program.parse(process.argv);
   try {
     await fse.remove('../dist/packages');
 
-    await execa('yarn', ['install'], { stdout: 'inherit', cwd: '../' });
-
-    await updateVersion(program.nextVersion);
+    if (!program.skipVersionValidation) {
+      await execa(
+        'yarn',
+        [
+          'validate-versions',
+          '--compareVersion',
+          program.nextVersion,
+          '--path',
+          '../ng-packs/packages',
+        ],
+        { stdout: 'inherit', cwd: '../../scripts' },
+      );
+    }
 
     if (program.preview) await replaceWithPreview(program.nextVersion);
 
@@ -87,15 +98,12 @@ program.parse(process.argv);
 })();
 
 async function updateVersion(version: string) {
-  await fse.rename('../lerna.version.json', '../lerna.json');
 
   await execa(
     'yarn',
-    ['lerna', 'version', version, '--yes', '--no-commit-hooks', '--skip-git', '--force-publish'],
+    ['update-version', version],
     { stdout: 'inherit', cwd: '../' },
   );
-
-  await fse.rename('../lerna.json', '../lerna.version.json');
 
   await execa('yarn', ['replace-with-tilde']);
 }

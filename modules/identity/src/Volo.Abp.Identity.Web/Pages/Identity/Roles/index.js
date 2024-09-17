@@ -62,7 +62,8 @@
                             _identityRoleAppService
                                 .delete(data.record.id)
                                 .then(function () {
-                                    _dataTable.ajax.reload();
+                                    _dataTable.ajax.reloadEx();
+                                    abp.notify.success(l('DeletedSuccessfully'));
                                 });
                         },
                     }
@@ -88,13 +89,13 @@
                             var name = '<span>' + $.fn.dataTable.render.text().display(data) + '</span>'; //prevent against possible XSS
                             if (row.isDefault) {
                                 name +=
-                                    '<span class="badge badge-pill badge-success ml-1">' +
+                                    '<span class="badge rounded-pill bg-success ms-1">' +
                                     l('DisplayName:IsDefault') +
                                     '</span>';
                             }
                             if (row.isPublic) {
                                 name +=
-                                    '<span class="badge badge-pill badge-info ml-1">' +
+                                    '<span class="badge rounded-pill bg-info ms-1">' +
                                     l('DisplayName:IsPublic') +
                                     '</span>';
                             }
@@ -127,14 +128,14 @@
         );
 
         _createModal.onResult(function () {
-            _dataTable.ajax.reload();
+            _dataTable.ajax.reloadEx();
         });
 
         _editModal.onResult(function () {
-            _dataTable.ajax.reload();
+            _dataTable.ajax.reloadEx();
         });
 
-        _$wrapper.find('button[name=CreateRole]').click(function (e) {
+        $('#AbpContentToolbar button[name=CreateRole]').click(function (e) {
             e.preventDefault();
             _createModal.open();
         });

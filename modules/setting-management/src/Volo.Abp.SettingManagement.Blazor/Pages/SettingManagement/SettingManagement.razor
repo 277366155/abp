@@ -1,5 +1,8 @@
 ﻿@page "/setting-management"
+@using Microsoft.AspNetCore.Authorization
+@using Volo.Abp.AspNetCore.Components.Web.Theming.Layout
 @using Volo.Abp.Features
+@attribute [Authorize]
 @attribute [RequiresFeature(SettingManagementFeatures.Enable)]
 
 @* ************************* PAGE HEADER ************************* *@
@@ -9,7 +12,7 @@
 
 <Card>
     <CardBody>
-        <Tabs @bind-SelectedTab="@SelectedGroup" TabPosition="TabPosition.Left" Pills="true">
+        <Tabs @bind-SelectedTab="@SelectedGroup" TabPosition="TabPosition.Start" Pills="true" RenderMode="TabsRenderMode.LazyReload" VerticalItemsColumnSize="ColumnSize.Is3">
             <Items>
                 @foreach (var group in SettingComponentCreationContext.Groups)
                 {
@@ -21,10 +24,8 @@
             <Content>
                 @foreach (var group in SettingComponentCreationContext.Groups)
                 {
-                    <TabPanel Name="@GetNormalizedString(group.Id)">
-                        <h2>@group.DisplayName</h2>
-                        <Divider />
-
+                    <TabPanel Name="@GetNormalizedString(group.Id)" class="abp-md-form">
+                       
                         @{
                             SettingItemRenders.Add(builder =>
                             {

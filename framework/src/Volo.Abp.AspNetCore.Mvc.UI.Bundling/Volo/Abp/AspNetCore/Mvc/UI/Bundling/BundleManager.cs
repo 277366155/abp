@@ -12,243 +12,270 @@ using Microsoft.Extensions.Options;
 using Volo.Abp.AspNetCore.Mvc.UI.Bundling.Scripts;
 using Volo.Abp.AspNetCore.Mvc.UI.Bundling.Styles;
 using Volo.Abp.AspNetCore.Mvc.UI.Resources;
-using Volo.Abp.AspNetCore.VirtualFileSystem;
 using Volo.Abp.DependencyInjection;
 using Volo.Abp.VirtualFileSystem;
 
-namespace Volo.Abp.AspNetCore.Mvc.UI.Bundling
+namespace Volo.Abp.AspNetCore.Mvc.UI.Bundling;
+
+public class BundleManager : IBundleManager, ITransientDependency
 {
-    public class BundleManager : IBundleManager, ITransientDependency
+    public ILogger<BundleManager> Logger { get; set; }
+
+    protected readonly AbpBundlingOptions Options;
+    protected readonly AbpBundleContributorOptions ContributorOptions;
+    protected readonly IWebHostEnvironment HostingEnvironment;
+    protected readonly IScriptBundler ScriptBundler;
+    protected readonly IStyleBundler StyleBundler;
+    protected readonly IServiceProvider ServiceProvider;
+    protected readonly IDynamicFileProvider DynamicFileProvider;
+    protected readonly IBundleCache BundleCache;
+    protected readonly IWebRequestResources RequestResources;
+
+    public BundleManager(
+        IOptions<AbpBundlingOptions> options,
+        IOptions<AbpBundleContributorOptions> contributorOptions,
+        IScriptBundler scriptBundler,
+        IStyleBundler styleBundler,
+        IWebHostEnvironment hostingEnvironment,
+        IServiceProvider serviceProvider,
+        IDynamicFileProvider dynamicFileProvider,
+        IBundleCache bundleCache,
+        IWebRequestResources requestResources)
     {
-        public ILogger<BundleManager> Logger { get; set; }
+        Options = options.Value;
+        ContributorOptions = contributorOptions.Value;
+        HostingEnvironment = hostingEnvironment;
+        ScriptBundler = scriptBundler;
+        ServiceProvider = serviceProvider;
+        DynamicFileProvider = dynamicFileProvider;
+        BundleCache = bundleCache;
+        RequestResources = requestResources;
+        StyleBundler = styleBundler;
 
-        protected readonly AbpBundlingOptions Options;
-        protected readonly AbpBundleContributorOptions ContributorOptions;
-        protected readonly IWebHostEnvironment HostingEnvironment;
-        protected readonly IScriptBundler ScriptBundler;
-        protected readonly IStyleBundler StyleBundler;
-        protected readonly IServiceProvider ServiceProvider;
-        protected readonly IDynamicFileProvider DynamicFileProvider;
-        protected readonly IBundleCache BundleCache;
-        protected readonly IWebRequestResources RequestResources;
+        Logger = NullLogger<BundleManager>.Instance;
+    }
 
-        public BundleManager(
-            IOptions<AbpBundlingOptions> options,
-            IOptions<AbpBundleContributorOptions> contributorOptions,
-            IScriptBundler scriptBundler,
-            IStyleBundler styleBundler,
-            IWebHostEnvironment hostingEnvironment,
-            IServiceProvider serviceProvider,
-            IDynamicFileProvider dynamicFileProvider,
-            IBundleCache bundleCache,
-            IWebRequestResources requestResources)
+    public virtual async Task<IReadOnlyList<BundleFile>> GetStyleBundleFilesAsync(string bundleName)
+    {
+        return await GetBundleFilesAsync(Options.StyleBundles, bundleName, StyleBundler);
+    }
+
+    public virtual async Task<IReadOnlyList<BundleFile>> GetScriptBundleFilesAsync(string bundleName)
+    {
+        return await GetBundleFilesAsync(Options.ScriptBundles, bundleName, ScriptBundler);
+    }
+
+    protected virtual async Task<IReadOnlyList<BundleFile>> GetBundleFilesAsync(BundleConfigurationCollection bundles, string bundleName, IBundler bundler)
+    {
+        var files = new List<BundleFile>();
+
+        var contributors = GetContributors(bundles, bundleName);
+        var bundleFiles = RequestResources.TryAdd(await GetBundleFilesAsync(contributors));
+        var dynamicResources = RequestResources.TryAdd(await GetDynamicResourcesAsync(contributors));
+
+        if (!IsBundlingEnabled())
         {
-            Options = options.Value;
-            ContributorOptions = contributorOptions.Value;
-            HostingEnvironment = hostingEnvironment;
-            ScriptBundler = scriptBundler;
-            ServiceProvider = serviceProvider;
-            DynamicFileProvider = dynamicFileProvider;
-            BundleCache = bundleCache;
-            RequestResources = requestResources;
-            StyleBundler = styleBundler;
-
-            Logger = NullLogger<BundleManager>.Instance;
+            return bundleFiles.Union(dynamicResources).ToImmutableList();
         }
 
-        public virtual async Task<IReadOnlyList<string>> GetStyleBundleFilesAsync(string bundleName)
+        var localBundleFiles = new List<string>();
+        foreach (var bundleFile in bundleFiles)
         {
-            return await GetBundleFilesAsync(Options.StyleBundles, bundleName, StyleBundler);
-        }
-
-        public virtual async Task<IReadOnlyList<string>> GetScriptBundleFilesAsync(string bundleName)
-        {
-            return await GetBundleFilesAsync(Options.ScriptBundles, bundleName, ScriptBundler);
-        }
-
-        protected virtual async Task<IReadOnlyList<string>> GetBundleFilesAsync(BundleConfigurationCollection bundles, string bundleName, IBundler bundler)
-        {
-            var contributors = GetContributors(bundles, bundleName);
-            var bundleFiles = RequestResources.TryAdd(await GetBundleFilesAsync(contributors));
-            var dynamicResources = RequestResources.TryAdd(await GetDynamicResourcesAsync(contributors));
-
-            if (!IsBundlingEnabled())
+            if (!bundleFile.IsExternalFile)
             {
-                return bundleFiles.Union(dynamicResources).ToImmutableList();
+                localBundleFiles.Add(bundleFile.FileName);
             }
-
-            var bundleRelativePath =
-                Options.BundleFolderName.EnsureEndsWith('/') +
-                bundleName + "." + bundleFiles.JoinAsString("|").ToMd5() + "." + bundler.FileExtension;
-
-            var cacheItem = BundleCache.GetOrAdd(bundleRelativePath, () =>
+            else
             {
-                var cacheValue = new BundleCacheItem(
-                    new List<string>
-                    {
-                        "/" + bundleRelativePath
-                    }
-                );
-
-                WatchChanges(cacheValue, bundleFiles, bundleRelativePath);
-
-                var bundleResult = bundler.Bundle(
-                    new BundlerContext(
-                        bundleRelativePath,
-                        bundleFiles,
-                        IsMinficationEnabled()
-                    )
-                );
-
-                SaveBundleResult(bundleRelativePath, bundleResult);
-
-                return cacheValue;
-            });
-
-            return cacheItem.Files.Union(dynamicResources).ToImmutableList();
-        }
-
-        private void WatchChanges(BundleCacheItem cacheValue, List<string> files, string bundleRelativePath)
-        {
-            lock (cacheValue.WatchDisposeHandles)
-            {
-                foreach (var file in files)
+                if (localBundleFiles.Count != 0)
                 {
-                    var watchDisposeHandle = HostingEnvironment.WebRootFileProvider.Watch(file).RegisterChangeCallback(_ =>
-                    {
-                        lock (cacheValue.WatchDisposeHandles)
-                        {
-                            cacheValue.WatchDisposeHandles.ForEach(h => h.Dispose());
-                            cacheValue.WatchDisposeHandles.Clear();
-                        }
-
-                        BundleCache.Remove(bundleRelativePath);
-                        DynamicFileProvider.Delete("/wwwroot/" + bundleRelativePath); //TODO: get rid of wwwroot!
-                    }, null);
-
-                    cacheValue.WatchDisposeHandles.Add(watchDisposeHandle);
+                    files.AddRange(AddToBundleCache(bundleName, bundler, localBundleFiles).Files);
+                    localBundleFiles.Clear();
                 }
+
+                files.Add(bundleFile);
             }
         }
 
-        protected virtual void SaveBundleResult(string bundleRelativePath, BundleResult bundleResult)
+        if (localBundleFiles.Count != 0)
         {
-            var fileName = bundleRelativePath.Substring(bundleRelativePath.IndexOf('/') + 1);
+            files.AddRange(AddToBundleCache(bundleName, bundler, localBundleFiles).Files);
+        }
 
-            DynamicFileProvider.AddOrUpdate(
-                new InMemoryFileInfo(
-                    "/wwwroot/" + bundleRelativePath, //TODO: get rid of wwwroot!
-                    Encoding.UTF8.GetBytes(bundleResult.Content),
-                    fileName
+        return files.Union(dynamicResources).ToImmutableList();
+    }
+
+    private BundleCacheItem AddToBundleCache(string bundleName, IBundler bundler, List<string> bundleFiles)
+    {
+        var bundleRelativePath =
+            Options.BundleFolderName.EnsureEndsWith('/') +
+            bundleName + "." + bundleFiles.JoinAsString("|").ToMd5() + "." + bundler.FileExtension;
+
+        return BundleCache.GetOrAdd(bundleRelativePath, () =>
+        {
+            var cacheValue = new BundleCacheItem(
+                new List<BundleFile>
+                {
+                    new BundleFile("/" + bundleRelativePath)
+                }
+            );
+
+            WatchChanges(cacheValue, bundleFiles, bundleRelativePath);
+
+            var bundleResult = bundler.Bundle(
+                new BundlerContext(
+                    bundleRelativePath,
+                    bundleFiles,
+                    IsMinficationEnabled()
                 )
             );
-        }
 
-        protected virtual bool IsBundlingEnabled()
+            SaveBundleResult(bundleRelativePath, bundleResult);
+
+            return cacheValue;
+        });
+    }
+
+    private void WatchChanges(BundleCacheItem cacheValue, List<string> files, string bundleRelativePath)
+    {
+        lock (cacheValue.WatchDisposeHandles)
         {
-            switch (Options.Mode)
+            foreach (var file in files)
             {
-                case BundlingMode.None:
-                    return false;
-                case BundlingMode.Bundle:
-                case BundlingMode.BundleAndMinify:
-                    return true;
-                case BundlingMode.Auto:
-                    return !HostingEnvironment.IsDevelopment();
-                default:
-                    throw new AbpException($"Unhandled {nameof(BundlingMode)}: {Options.Mode}");
-            }
-        }
-
-        protected virtual bool IsMinficationEnabled()
-        {
-            switch (Options.Mode)
-            {
-                case BundlingMode.None:
-                case BundlingMode.Bundle:
-                    return false;
-                case BundlingMode.BundleAndMinify:
-                    return true;
-                case BundlingMode.Auto:
-                    return !HostingEnvironment.IsDevelopment();
-                default:
-                    throw new AbpException($"Unhandled {nameof(BundlingMode)}: {Options.Mode}");
-            }
-        }
-
-        protected async Task<List<string>> GetBundleFilesAsync(List<IBundleContributor> contributors)
-        {
-            var context = CreateBundleConfigurationContext();
-
-            foreach (var contributor in contributors)
-            {
-                await contributor.PreConfigureBundleAsync(context);
-            }
-
-            foreach (var contributor in contributors)
-            {
-                await contributor.ConfigureBundleAsync(context);
-            }
-
-            foreach (var contributor in contributors)
-            {
-                await contributor.PostConfigureBundleAsync(context);
-            }
-
-            return context.Files;
-        }
-
-        protected virtual async Task<List<string>> GetDynamicResourcesAsync(List<IBundleContributor> contributors)
-        {
-            var context = CreateBundleConfigurationContext();
-
-            foreach (var contributor in contributors)
-            {
-                await contributor.ConfigureDynamicResourcesAsync(context);
-            }
-
-            return context.Files;
-        }
-
-        protected virtual BundleConfigurationContext CreateBundleConfigurationContext()
-        {
-            return new BundleConfigurationContext(ServiceProvider, HostingEnvironment.WebRootFileProvider);
-        }
-
-        protected virtual List<IBundleContributor> GetContributors(BundleConfigurationCollection bundles, string bundleName)
-        {
-            var contributors = new List<IBundleContributor>();
-
-            AddContributorsWithBaseBundles(contributors, bundles, bundleName);
-
-            for (var i = 0; i < contributors.Count; ++i)
-            {
-                var extensions = ContributorOptions.Extensions(contributors[i].GetType()).GetAll();
-                if (extensions.Count > 0)
+                var watchDisposeHandle = HostingEnvironment.WebRootFileProvider.Watch(file).RegisterChangeCallback(_ =>
                 {
-                    contributors.InsertRange(i + 1, extensions);
-                    i += extensions.Count;
-                }
-            }
+                    lock (cacheValue.WatchDisposeHandles)
+                    {
+                        cacheValue.WatchDisposeHandles.ForEach(h => h.Dispose());
+                        cacheValue.WatchDisposeHandles.Clear();
+                    }
 
-            return contributors;
+                    BundleCache.Remove(bundleRelativePath);
+                    DynamicFileProvider.Delete("/wwwroot/" + bundleRelativePath); //TODO: get rid of wwwroot!
+                    }, null);
+
+                cacheValue.WatchDisposeHandles.Add(watchDisposeHandle);
+            }
+        }
+    }
+
+    protected virtual void SaveBundleResult(string bundleRelativePath, BundleResult bundleResult)
+    {
+        var fileName = bundleRelativePath.Substring(bundleRelativePath.IndexOf('/') + 1);
+
+        DynamicFileProvider.AddOrUpdate(
+            new InMemoryFileInfo(
+                "/wwwroot/" + bundleRelativePath, //TODO: get rid of wwwroot!
+                Encoding.UTF8.GetBytes(bundleResult.Content),
+                fileName
+            )
+        );
+    }
+
+    protected virtual bool IsBundlingEnabled()
+    {
+        switch (Options.Mode)
+        {
+            case BundlingMode.None:
+                return false;
+            case BundlingMode.Bundle:
+            case BundlingMode.BundleAndMinify:
+                return true;
+            case BundlingMode.Auto:
+                return !HostingEnvironment.IsDevelopment();
+            default:
+                throw new AbpException($"Unhandled {nameof(BundlingMode)}: {Options.Mode}");
+        }
+    }
+
+    protected virtual bool IsMinficationEnabled()
+    {
+        switch (Options.Mode)
+        {
+            case BundlingMode.None:
+            case BundlingMode.Bundle:
+                return false;
+            case BundlingMode.BundleAndMinify:
+                return true;
+            case BundlingMode.Auto:
+                return !HostingEnvironment.IsDevelopment();
+            default:
+                throw new AbpException($"Unhandled {nameof(BundlingMode)}: {Options.Mode}");
+        }
+    }
+
+    protected async Task<List<BundleFile>> GetBundleFilesAsync(List<IBundleContributor> contributors)
+    {
+        var context = CreateBundleConfigurationContext();
+
+        foreach (var contributor in contributors)
+        {
+            await contributor.PreConfigureBundleAsync(context);
         }
 
-        protected virtual void AddContributorsWithBaseBundles(List<IBundleContributor> contributors, BundleConfigurationCollection bundles, string bundleName)
+        foreach (var contributor in contributors)
         {
-            var bundleConfiguration = bundles.Get(bundleName);
+            await contributor.ConfigureBundleAsync(context);
+        }
 
-            foreach (var baseBundleName in bundleConfiguration.BaseBundles)
+        foreach (var contributor in contributors)
+        {
+            await contributor.PostConfigureBundleAsync(context);
+        }
+
+        return context.Files;
+    }
+
+    protected virtual async Task<List<BundleFile>> GetDynamicResourcesAsync(List<IBundleContributor> contributors)
+    {
+        var context = CreateBundleConfigurationContext();
+
+        foreach (var contributor in contributors)
+        {
+            await contributor.ConfigureDynamicResourcesAsync(context);
+        }
+
+        return context.Files;
+    }
+
+    protected virtual BundleConfigurationContext CreateBundleConfigurationContext()
+    {
+        return new BundleConfigurationContext(ServiceProvider, HostingEnvironment.WebRootFileProvider);
+    }
+
+    protected virtual List<IBundleContributor> GetContributors(BundleConfigurationCollection bundles, string bundleName)
+    {
+        var contributors = new List<IBundleContributor>();
+
+        AddContributorsWithBaseBundles(contributors, bundles, bundleName);
+
+        for (var i = 0; i < contributors.Count; ++i)
+        {
+            var extensions = ContributorOptions.Extensions(contributors[i].GetType()).GetAll();
+            if (extensions.Count > 0)
             {
-                AddContributorsWithBaseBundles(contributors, bundles, baseBundleName); //Recursive call
+                contributors.InsertRange(i + 1, extensions);
+                i += extensions.Count;
             }
+        }
 
-            var selfContributors = bundleConfiguration.Contributors.GetAll();
+        return contributors;
+    }
 
-            if (selfContributors.Any())
-            {
-                contributors.AddRange(selfContributors);
-            }
+    protected virtual void AddContributorsWithBaseBundles(List<IBundleContributor> contributors, BundleConfigurationCollection bundles, string bundleName)
+    {
+        var bundleConfiguration = bundles.Get(bundleName);
+
+        foreach (var baseBundleName in bundleConfiguration.BaseBundles)
+        {
+            AddContributorsWithBaseBundles(contributors, bundles, baseBundleName); //Recursive call
+        }
+
+        var selfContributors = bundleConfiguration.Contributors.GetAll();
+
+        if (selfContributors.Any())
+        {
+            contributors.AddRange(selfContributors);
         }
     }
 }

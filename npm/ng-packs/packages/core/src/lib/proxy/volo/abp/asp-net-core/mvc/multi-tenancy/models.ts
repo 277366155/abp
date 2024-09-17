@@ -1,7 +1,9 @@
+
 export interface FindTenantResultDto {
   success: boolean;
   tenantId?: string;
   name?: string;
+  normalizedName?: string;
   isActive: boolean;
 }
 

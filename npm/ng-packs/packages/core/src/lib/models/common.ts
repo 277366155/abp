@@ -9,8 +9,27 @@ export namespace ABP {
     environment: Partial<Environment>;
     registerLocaleFn: (locale: string) => Promise<any>;
     skipGetAppConfiguration?: boolean;
+    skipInitAuthService?: boolean;
     sendNullsAsQueryParam?: boolean;
     tenantKey?: string;
+    localizations?: Localization[];
+    othersGroup?: string;
+    dynamicLayouts?: Map<string, string>;
+    disableProjectNameInTitle?: boolean;
+  }
+
+  export interface Child {
+    localizations?: Localization[];
+  }
+
+  export interface Localization {
+    culture: string;
+    resources: LocalizationResource[];
+  }
+
+  export interface LocalizationResource {
+    resourceName: string;
+    texts: Record<string, string>;
   }
 
   export interface HasPolicy {
@@ -52,9 +71,11 @@ export namespace ABP {
   }
 
   export interface Route extends Nav {
-    path: string;
+    path?: string;
     layout?: eLayoutType;
     iconClass?: string;
+    group?: string;
+    breadcrumbText?: string;
   }
 
   export interface Tab extends Nav {

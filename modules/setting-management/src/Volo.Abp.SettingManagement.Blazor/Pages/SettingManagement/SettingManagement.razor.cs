@@ -8,44 +8,56 @@ using Microsoft.Extensions.Options;
 using Volo.Abp.BlazoriseUI;
 using Volo.Abp.SettingManagement.Localization;
 
-namespace Volo.Abp.SettingManagement.Blazor.Pages.SettingManagement
+namespace Volo.Abp.SettingManagement.Blazor.Pages.SettingManagement;
+
+public partial class SettingManagement
 {
-    public partial class SettingManagement
+    [Inject]
+    protected IServiceProvider ServiceProvider { get; set; }
+
+    protected SettingComponentCreationContext SettingComponentCreationContext { get; set; }
+
+    [Inject]
+    protected IOptions<SettingManagementComponentOptions> _options { get; set; }
+    [Inject]
+    protected IStringLocalizer<AbpSettingManagementResource> L { get; set; }
+
+    protected SettingManagementComponentOptions Options => _options.Value;
+
+    protected List<RenderFragment> SettingItemRenders { get; set; } = new List<RenderFragment>();
+
+    protected string SelectedGroup;
+    protected List<BreadcrumbItem> BreadcrumbItems = new List<BreadcrumbItem>();
+
+    protected async override Task OnInitializedAsync()
     {
-        [Inject]
-        protected IServiceProvider ServiceProvider { get; set; }
+        BreadcrumbItems.Add(new BreadcrumbItem(@L["Settings"]));
 
-        protected SettingComponentCreationContext SettingComponentCreationContext { get; set; }
+        SettingComponentCreationContext = new SettingComponentCreationContext(ServiceProvider);
 
-        [Inject]
-        protected IOptions<SettingManagementComponentOptions> _options { get; set; }
-        [Inject]
-        protected IStringLocalizer<AbpSettingManagementResource> L { get; set; }
-
-        protected SettingManagementComponentOptions Options => _options.Value;
-
-        protected List<RenderFragment> SettingItemRenders { get; set; } = new List<RenderFragment>();
-
-        protected string SelectedGroup;
-        protected List<BreadcrumbItem> BreadcrumbItems = new List<BreadcrumbItem>();
-
-        protected async override Task OnInitializedAsync()
+        foreach (var contributor in Options.Contributors)
         {
-            SettingComponentCreationContext = new SettingComponentCreationContext(ServiceProvider);
+            await contributor.ConfigureAsync(SettingComponentCreationContext);
+        }
+        SettingComponentCreationContext.Normalize();
+        SettingItemRenders.Clear();
 
-            foreach (var contributor in Options.Contributors)
-            {
-                await contributor.ConfigureAsync(SettingComponentCreationContext);
-            }
+        SelectedGroup = GetNormalizedString(SettingComponentCreationContext.Groups.First().Id);
+    }
 
-            SettingItemRenders.Clear();
-
-            SelectedGroup = GetNormalizedString(SettingComponentCreationContext.Groups.First().Id);
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await Task.Yield();
+            await InvokeAsync(StateHasChanged);
         }
 
-        protected virtual string GetNormalizedString(string value)
-        {
-            return value.Replace('.', '_');
-        }
+        await base.OnAfterRenderAsync(firstRender);
+    }
+
+    protected virtual string GetNormalizedString(string value)
+    {
+        return value.Replace('.', '_');
     }
 }

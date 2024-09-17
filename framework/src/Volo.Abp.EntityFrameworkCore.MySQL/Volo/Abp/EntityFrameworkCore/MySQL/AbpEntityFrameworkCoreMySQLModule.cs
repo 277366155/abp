@@ -1,22 +1,27 @@
-﻿using Volo.Abp.Guids;
+﻿using Volo.Abp.EntityFrameworkCore.GlobalFilters;
+using Volo.Abp.Guids;
 using Volo.Abp.Modularity;
 
-namespace Volo.Abp.EntityFrameworkCore.MySQL
+namespace Volo.Abp.EntityFrameworkCore.MySQL;
+
+[DependsOn(
+    typeof(AbpEntityFrameworkCoreModule)
+    )]
+public class AbpEntityFrameworkCoreMySQLModule : AbpModule
 {
-    [DependsOn(
-        typeof(AbpEntityFrameworkCoreModule)
-        )]
-    public class AbpEntityFrameworkCoreMySQLModule : AbpModule
+    public override void ConfigureServices(ServiceConfigurationContext context)
     {
-        public override void ConfigureServices(ServiceConfigurationContext context)
+        Configure<AbpSequentialGuidGeneratorOptions>(options =>
         {
-            Configure<AbpSequentialGuidGeneratorOptions>(options =>
+            if (options.DefaultSequentialGuidType == null)
             {
-                if (options.DefaultSequentialGuidType == null)
-                {
-                    options.DefaultSequentialGuidType = SequentialGuidType.SequentialAsString;
-                }
-            });
-        }
+                options.DefaultSequentialGuidType = SequentialGuidType.SequentialAsString;
+            }
+        });
+
+        Configure<AbpEfCoreGlobalFilterOptions>(options =>
+        {
+            options.UseDbFunction = true;
+        });
     }
 }

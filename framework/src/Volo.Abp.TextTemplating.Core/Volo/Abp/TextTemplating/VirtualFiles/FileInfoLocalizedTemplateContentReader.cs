@@ -1,25 +1,35 @@
 ﻿using System.Threading.Tasks;
 using Microsoft.Extensions.FileProviders;
 
-namespace Volo.Abp.TextTemplating.VirtualFiles
+namespace Volo.Abp.TextTemplating.VirtualFiles;
+
+public class FileInfoLocalizedTemplateContentReader : ILocalizedTemplateContentReader
 {
-    public class FileInfoLocalizedTemplateContentReader : ILocalizedTemplateContentReader
+    private IFileInfo _fileInfo = default!;
+    private string _content = default!;
+
+    public async Task ReadContentsAsync(IFileInfo fileInfo)
     {
-        private string _content;
+        _fileInfo = fileInfo;
+        _content = await fileInfo.ReadAsStringAsync();
+    }
 
-        public async Task ReadContentsAsync(IFileInfo fileInfo)
+    public string? GetContentOrNull(string? culture)
+    {
+        if (culture == null)
         {
-            _content = await fileInfo.ReadAsStringAsync();
+            return _content;
         }
 
-        public string GetContentOrNull(string culture)
-        {
-            if (culture == null)
-            {
-                return _content;
-            }
+        return null;
+    }
 
-            return null;
-        }
+    public TemplateContentFileInfo GetFile()
+    {
+        return new TemplateContentFileInfo()
+        {
+            FileName = _fileInfo.Name,
+            FileContent = _content
+        };
     }
 }

@@ -11,8 +11,11 @@
     "Close": "أغلق",
     "Save": "حفظ",
     "SavingWithThreeDot": "حفظ...",
-    "Actions": "أجراءات",
+    "Actions": "الإجراءات",
     "Delete": "حذف",
+    "CreatedSuccessfully": "تم الإنشاء بنجاح",
+    "SavedSuccessfully": "تم الحفظ  بنجاح",
+    "DeletedSuccessfully": "تم الحذف بنجاح",
     "Edit": "تعديل",
     "Refresh": "تحديث",
     "Language": "لغة",
@@ -44,6 +47,18 @@
     "AreYouSureYouWantToCancelEditingWarningMessage": "لم تحفظ التغييرات.",
     "GoHomePage": "اذهب الى الصفحة الرئيسية",
     "GoBack": "عد",
-    "Search": "بحث"
+    "Search": "بحث",
+    "ItemWillBeDeletedMessageWithFormat": "سيتم حذف {0}!",
+    "ItemWillBeDeletedMessage": "سوف يتم حذف هذا البند!",
+    "ManageYourAccount": "إدارة حسابك",
+    "OthersGroup": "آخرون",
+    "Today": "اليوم",
+    "Apply": "يتقدم",
+    "InternetConnectionInfo": "لا يمكن تنفيذ العملية. اتصالك بالإنترنت غير متوفر في الوقت الراهن.",
+    "CopiedToTheClipboard": "تم النسخ إلى الحافظة",
+    "AddNew": "اضف جديد",
+    "ProfilePicture": "الصوره الشخصيه",
+    "Theme": "سمة",
+    "NotAssigned": "غيرمعتمد"
   }
 }

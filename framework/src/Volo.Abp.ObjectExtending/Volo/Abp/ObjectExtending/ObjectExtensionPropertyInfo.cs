@@ -5,82 +5,101 @@ using Volo.Abp.Localization;
 using Volo.Abp.ObjectExtending.Modularity;
 using Volo.Abp.Reflection;
 
-namespace Volo.Abp.ObjectExtending
+namespace Volo.Abp.ObjectExtending;
+
+public class ObjectExtensionPropertyInfo : IHasNameWithLocalizableDisplayName, IBasicObjectExtensionPropertyInfo
 {
-    public class ObjectExtensionPropertyInfo : IHasNameWithLocalizableDisplayName, IBasicObjectExtensionPropertyInfo
+    [NotNull]
+    public ObjectExtensionInfo ObjectExtension { get; }
+
+    [NotNull]
+    public string Name { get; }
+
+    [NotNull]
+    public Type Type { get; }
+
+    [NotNull]
+    public List<Attribute> Attributes { get; }
+
+    [NotNull]
+    public List<Action<ObjectExtensionPropertyValidationContext>> Validators { get; }
+
+    public ILocalizableString? DisplayName { get; set; }
+
+    /// <summary>
+    /// Indicates whether to check the other side of the object mapping
+    /// if it explicitly defines the property. This property is used in;
+    ///
+    /// * .MapExtraPropertiesTo() extension method.
+    /// * .MapExtraProperties() configuration for the AutoMapper.
+    ///
+    /// It this is true, these methods check if the mapping object
+    /// has defined the property using the <see cref="ObjectExtensionManager"/>.
+    ///
+    /// Default: null (unspecified, uses the default logic).
+    /// </summary>
+    public bool? CheckPairDefinitionOnMapping { get; set; }
+
+    [NotNull]
+    public Dictionary<object, object> Configuration { get; }
+
+    /// <summary>
+    /// Uses as the default value if <see cref="DefaultValueFactory"/> was not set.
+    /// </summary>
+    public object? DefaultValue { get; set; }
+
+    /// <summary>
+    /// Used with the first priority to create the default value for the property.
+    /// Uses to the <see cref="DefaultValue"/> if this was not set.
+    /// </summary>
+    public Func<object>? DefaultValueFactory { get; set; }
+
+    [NotNull]
+    public ExtensionPropertyLookupConfiguration Lookup { get; set; }
+
+    public ExtensionPropertyUI UI { get; set; }
+
+    public ExtensionPropertyPolicyConfiguration Policy { get; set; }
+
+    public ObjectExtensionPropertyInfo(
+        [NotNull] ObjectExtensionInfo objectExtension,
+        [NotNull] Type type,
+        [NotNull] string name)
     {
-        [NotNull]
-        public ObjectExtensionInfo ObjectExtension { get; }
+        ObjectExtension = Check.NotNull(objectExtension, nameof(objectExtension));
+        Type = Check.NotNull(type, nameof(type));
+        Name = Check.NotNull(name, nameof(name));
 
-        [NotNull]
-        public string Name { get; }
+        Configuration = new Dictionary<object, object>();
+        Attributes = new List<Attribute>();
+        Validators = new List<Action<ObjectExtensionPropertyValidationContext>>();
 
-        [NotNull]
-        public Type Type { get; }
+        Attributes.AddRange(ExtensionPropertyHelper.GetDefaultAttributes(Type));
+        DefaultValue = TypeHelper.GetDefaultValue(Type);
+        Lookup = new ExtensionPropertyLookupConfiguration();
+        UI = new ExtensionPropertyUI();
+        Policy = new ExtensionPropertyPolicyConfiguration();
+    }
 
-        [NotNull]
-        public List<Attribute> Attributes { get; }
+    public object? GetDefaultValue()
+    {
+        return ExtensionPropertyHelper.GetDefaultValue(Type, DefaultValueFactory, DefaultValue);
+    }
 
-        [NotNull]
-        public List<Action<ObjectExtensionPropertyValidationContext>> Validators { get; }
+    public class ExtensionPropertyUI
+    {
+        public int Order { get; set; }
 
-        [CanBeNull]
-        public ILocalizableString DisplayName { get; set; }
+        public ExtensionPropertyUIEditModal EditModal { get; set; }
 
-        /// <summary>
-        /// Indicates whether to check the other side of the object mapping
-        /// if it explicitly defines the property. This property is used in;
-        ///
-        /// * .MapExtraPropertiesTo() extension method.
-        /// * .MapExtraProperties() configuration for the AutoMapper.
-        ///
-        /// It this is true, these methods check if the mapping object
-        /// has defined the property using the <see cref="ObjectExtensionManager"/>.
-        ///
-        /// Default: null (unspecified, uses the default logic).
-        /// </summary>
-        public bool? CheckPairDefinitionOnMapping { get; set; }
-
-        [NotNull]
-        public Dictionary<object, object> Configuration { get; }
-
-        /// <summary>
-        /// Uses as the default value if <see cref="DefaultValueFactory"/> was not set.
-        /// </summary>
-        [CanBeNull]
-        public object DefaultValue { get; set; }
-
-        /// <summary>
-        /// Used with the first priority to create the default value for the property.
-        /// Uses to the <see cref="DefaultValue"/> if this was not set.
-        /// </summary>
-        [CanBeNull]
-        public Func<object> DefaultValueFactory { get; set; }
-
-        [NotNull]
-        public ExtensionPropertyLookupConfiguration Lookup { get; set; }
-
-        public ObjectExtensionPropertyInfo(
-            [NotNull] ObjectExtensionInfo objectExtension,
-            [NotNull] Type type,
-            [NotNull] string name)
+        public ExtensionPropertyUI()
         {
-            ObjectExtension = Check.NotNull(objectExtension, nameof(objectExtension));
-            Type = Check.NotNull(type, nameof(type));
-            Name = Check.NotNull(name, nameof(name));
-
-            Configuration = new Dictionary<object, object>();
-            Attributes = new List<Attribute>();
-            Validators = new List<Action<ObjectExtensionPropertyValidationContext>>();
-
-            Attributes.AddRange(ExtensionPropertyHelper.GetDefaultAttributes(Type));
-            DefaultValue = TypeHelper.GetDefaultValue(Type);
-            Lookup = new ExtensionPropertyLookupConfiguration();
+            EditModal = new ExtensionPropertyUIEditModal();
         }
+    }
 
-        public object GetDefaultValue()
-        {
-            return ExtensionPropertyHelper.GetDefaultValue(Type, DefaultValueFactory, DefaultValue);
-        }
+    public class ExtensionPropertyUIEditModal
+    {
+        public bool IsReadOnly { get; set; }
     }
 }

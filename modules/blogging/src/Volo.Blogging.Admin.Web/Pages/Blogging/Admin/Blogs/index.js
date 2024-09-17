@@ -48,14 +48,15 @@ $(function () {
                                     volo.blogging.admin.blogManagement
                                         .delete(data.record.id)
                                         .then(function () {
-                                            _dataTable.ajax.reload();
+                                            _dataTable.ajax.reloadEx();
+                                            abp.notify.success(l('DeletedSuccessfully'));
                                         });
                                 },
                             },
                             {
                                 text: l("ClearCache"),
                                 visible: abp.auth.isGranted(
-                                  'Blogging.Blog.ClearCache'  
+                                  'Blogging.Blog.ClearCache'
                                 ),
                                 confirmMessage: function (data) {
                                     return l("ClearCacheConfirmationMessage");
@@ -64,7 +65,7 @@ $(function () {
                                     volo.blogging.admin.blogManagement
                                         .clearCache(data.record.id)
                                         .then(function () {
-                                            _dataTable.ajax.reload();
+                                            _dataTable.ajax.reloadEx();
                                         })
                                 }
                             }
@@ -97,10 +98,10 @@ $(function () {
     });
 
     _createModal.onClose(function () {
-        _dataTable.ajax.reload();
+        _dataTable.ajax.reloadEx();
     });
 
     _editModal.onResult(function () {
-        _dataTable.ajax.reload();
+        _dataTable.ajax.reloadEx();
     });
 });

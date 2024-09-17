@@ -1,6 +1,7 @@
 {
   "culture": "ro-RO",
   "texts": {
+    "Volo.Abp.TenantManagement:DuplicateTenantName": "Numele chiriașului există deja: {Name}",
     "Menu:TenantManagement": "Administrarea clienţilor",
     "Tenants": "Clienţi",
     "NewTenant": "Client nou",
@@ -10,7 +11,6 @@
     "ConnectionStrings": "Connection Strings",
     "DisplayName:DefaultConnectionString": "Connection String implicit",
     "DisplayName:UseSharedDatabase": "Folosiţi baza de date partajată",
-    "ManageHostFeatures": "Administraţi caracteristicile de host",
     "Permission:TenantManagement": "Administrarea clienţilor",
     "Permission:Create": "Creează",
     "Permission:Edit": "Editează",

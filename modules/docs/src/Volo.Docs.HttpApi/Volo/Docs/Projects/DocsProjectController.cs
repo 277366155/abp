@@ -1,5 +1,7 @@
 ﻿using System.Threading.Tasks;
+using Asp.Versioning;
 using Microsoft.AspNetCore.Mvc;
+using Asp.Versioning;
 using Volo.Abp;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.AspNetCore.Mvc;
@@ -8,7 +10,7 @@ using Volo.Docs.Documents;
 namespace Volo.Docs.Projects
 {
     [RemoteService(Name = DocsRemoteServiceConsts.RemoteServiceName)]
-    [Area("docs")]
+    [Area(DocsRemoteServiceConsts.ModuleName)]
     [ControllerName("Project")]
     [Route("api/docs/projects")]
     public class DocsProjectController : AbpControllerBase, IProjectAppService

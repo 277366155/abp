@@ -1,20 +1,12 @@
-﻿using System;
-using System.Runtime.Serialization;
-using Volo.Abp;
+﻿using Volo.Abp;
 
-namespace Volo.CmsKit.Tags
+namespace Volo.CmsKit.Tags;
+
+public class EntityNotTaggableException : BusinessException
 {
-    [Serializable]
-    public class EntityNotTaggableException : BusinessException
+    public EntityNotTaggableException(string entityType)
     {
-        public EntityNotTaggableException(SerializationInfo serializationInfo, StreamingContext context) : base(serializationInfo, context)
-        {
-        }
-
-        public EntityNotTaggableException(string entityType) 
-        {
-            Code = CmsKitErrorCodes.Tags.EntityNotTaggable;
-            WithData(nameof(Tag.EntityType), entityType);
-        }
+        Code = CmsKitErrorCodes.Tags.EntityNotTaggable;
+        WithData(nameof(Tag.EntityType), entityType);
     }
 }

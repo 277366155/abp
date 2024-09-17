@@ -1,22 +1,25 @@
-import {
-  AuthGuard,
-  DynamicLayoutComponent,
-  PermissionGuard,
-  ReplaceableComponents,
-  ReplaceableRouteContainerComponent,
-} from '@abp/ng.core';
 import { NgModule } from '@angular/core';
 import { RouterModule, Routes } from '@angular/router';
+
+import {
+  authGuard,
+  permissionGuard,
+  ReplaceableComponents,
+  ReplaceableRouteContainerComponent,
+  RouterOutletComponent,
+} from '@abp/ng.core';
+
 import { TenantsComponent } from './components/tenants/tenants.component';
 import { eTenantManagementComponents } from './enums/components';
-import { TenantManagementExtensionsGuard } from './guards';
+import { tenantManagementExtensionsResolver } from './resolvers';
 
 const routes: Routes = [
   { path: '', redirectTo: 'tenants', pathMatch: 'full' },
   {
     path: '',
-    component: DynamicLayoutComponent,
-    canActivate: [AuthGuard, PermissionGuard, TenantManagementExtensionsGuard],
+    component: RouterOutletComponent,
+    canActivate: [authGuard, permissionGuard],
+    resolve: [tenantManagementExtensionsResolver],
     children: [
       {
         path: 'tenants',
@@ -28,6 +31,7 @@ const routes: Routes = [
             defaultComponent: TenantsComponent,
           } as ReplaceableComponents.RouteData<TenantsComponent>,
         },
+        title: 'AbpTenantManagement::Tenants',
       },
     ],
   },
@@ -37,4 +41,4 @@ const routes: Routes = [
   imports: [RouterModule.forChild(routes)],
   exports: [RouterModule],
 })
-export class TenantManagementRoutingModule {}
+export class TenantManagementRoutingModule { }

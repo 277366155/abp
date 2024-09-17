@@ -1,24 +1,43 @@
-using System.Threading.Tasks;
-using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Routing;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using MyCompanyName.MyProjectName.Blazor.Host;
+using MyCompanyName.MyProjectName.Blazor.Host.Client;
+using Volo.Abp.AspNetCore.Components.WebAssembly.WebApp;
 
-namespace MyCompanyName.MyProjectName.Blazor.Host
+var builder = WebApplication.CreateBuilder(args);
+
+//https://github.com/dotnet/aspnetcore/issues/52530
+builder.Services.Configure<RouteOptions>(options =>
 {
-    public class Program
-    {
-        public static async Task Main(string[] args)
-        {
-            var builder = WebAssemblyHostBuilder.CreateDefault(args);
+    options.SuppressCheckForUnhandledSecurityMetadata = true;
+});
 
-            var application = builder.AddApplication<MyProjectNameBlazorHostModule>(options =>
-            {
-                options.UseAutofac();
-            });
+// Add services to the container.
+builder.Services.AddRazorComponents()
+    .AddInteractiveWebAssemblyComponents();
 
-            var host = builder.Build();
+var app = builder.Build();
 
-            await application.InitializeAsync(host.Services);
-
-            await host.RunAsync();
-        }
-    }
+// Configure the HTTP request pipeline.
+if (app.Environment.IsDevelopment())
+{
+    app.UseWebAssemblyDebugging();
 }
+else
+{
+    // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
+    app.UseHsts();
+}
+
+app.UseHttpsRedirection();
+
+app.UseStaticFiles();
+app.UseAntiforgery();
+
+app.MapRazorComponents<App>()
+    .AddInteractiveWebAssemblyRenderMode()
+    .AddAdditionalAssemblies(WebAppAdditionalAssembliesHelper.GetAssemblies<MyProjectNameBlazorHostClientModule>());
+
+await app.RunAsync();

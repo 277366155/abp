@@ -1,5 +1,7 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
+using Asp.Versioning;
 using Microsoft.AspNetCore.Mvc;
 using Volo.Abp;
 using Volo.Abp.Application.Dtos;
@@ -9,7 +11,7 @@ using Volo.Docs.Admin.Projects;
 namespace Volo.Docs.Admin
 {
     [RemoteService(Name = DocsAdminRemoteServiceConsts.RemoteServiceName)]
-    [Area("docs-admin")]
+    [Area(DocsAdminRemoteServiceConsts.ModuleName)]
     [ControllerName("ProjectsAdmin")]
     [Route("api/docs/admin/projects")]
     public class ProjectsAdminController : AbpControllerBase, IProjectAdminAppService
@@ -59,6 +61,13 @@ namespace Volo.Docs.Admin
         public Task ReindexAllAsync()
         {
             return _projectAppService.ReindexAllAsync();
+        }
+
+        [HttpGet]
+        [Route("GetListProjectWithoutDetailsAsync")]
+        public Task<List<ProjectWithoutDetailsDto>> GetListWithoutDetailsAsync()
+        {
+            return _projectAppService.GetListWithoutDetailsAsync();
         }
 
         [HttpPost]

@@ -5,60 +5,79 @@ using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
 
-namespace Volo.Abp
+namespace Volo.Abp;
+
+public static class ObjectHelper
 {
-    public static class ObjectHelper
+    private static readonly ConcurrentDictionary<string, PropertyInfo?> _cachedObjectProperties = new();
+
+    public static void TrySetProperty<TObject, TValue>(
+        TObject obj,
+        Expression<Func<TObject, TValue>> propertySelector,
+        Func<TValue> valueFactory,
+        params Type[] ignoreAttributeTypes)
     {
-        private static readonly ConcurrentDictionary<string, PropertyInfo> CachedObjectProperties =
-            new ConcurrentDictionary<string, PropertyInfo>();
+        TrySetProperty(obj, propertySelector, x => valueFactory(), ignoreAttributeTypes);
+    }
 
-        public static void TrySetProperty<TObject, TValue>(
-            TObject obj,
-            Expression<Func<TObject, TValue>> propertySelector,
-            Func<TValue> valueFactory,
-            params Type[] ignoreAttributeTypes)
+    public static void TrySetProperty<TObject, TValue>(
+        TObject obj,
+        Expression<Func<TObject, TValue>> propertySelector,
+        Func<TObject, TValue> valueFactory,
+        params Type[]? ignoreAttributeTypes)
+    {
+        var cacheKey =
+            $"{obj?.GetType().FullName}-{propertySelector}-{(ignoreAttributeTypes != null ? "-" + string.Join("-", ignoreAttributeTypes.Select(x => x.FullName)) : "")}";
+
+        var property = _cachedObjectProperties.GetOrAdd(cacheKey, PropertyFactory);
+
+        property?.SetValue(obj, valueFactory(obj));
+        return;
+
+        PropertyInfo? PropertyFactory(string _)
         {
-            TrySetProperty(obj, propertySelector, x => valueFactory(), ignoreAttributeTypes);
-        }
-
-        public static void TrySetProperty<TObject, TValue>(
-            TObject obj,
-            Expression<Func<TObject, TValue>> propertySelector,
-            Func<TObject, TValue> valueFactory,
-            params Type[] ignoreAttributeTypes)
-        {
-            var cacheKey = $"{obj.GetType().FullName}-" +
-                           $"{propertySelector}-" +
-                           $"{(ignoreAttributeTypes != null ? "-" + string.Join("-", ignoreAttributeTypes.Select(x => x.FullName)) : "")}";
-
-            var property = CachedObjectProperties.GetOrAdd(cacheKey, () =>
+            MemberExpression? memberExpression;
+            switch (propertySelector.Body.NodeType)
             {
-                if (propertySelector.Body.NodeType != ExpressionType.MemberAccess)
-                {
+                case ExpressionType.Convert: {
+                    memberExpression = propertySelector.Body.As<UnaryExpression>().Operand as MemberExpression;
+                    break;
+                }
+                case ExpressionType.MemberAccess: {
+                    memberExpression = propertySelector.Body.As<MemberExpression>();
+                    break;
+                }
+                default: {
                     return null;
                 }
+            }
 
-                var memberExpression = propertySelector.Body.As<MemberExpression>();
+            if (memberExpression == null)
+            {
+                return null;
+            }
 
-                var propertyInfo = obj.GetType().GetProperties().FirstOrDefault(x =>
-                    x.Name == memberExpression.Member.Name &&
-                    x.GetSetMethod(true) != null);
+            var propertyInfo = obj?.GetType()
+                .GetProperties()
+                .FirstOrDefault(x => x.Name == memberExpression.Member.Name);
 
-                if (propertyInfo == null)
-                {
-                    return null;
-                }
+            if (propertyInfo == null)
+            {
+                return null;
+            }
 
-                if (ignoreAttributeTypes != null &&
-                    ignoreAttributeTypes.Any(ignoreAttribute => propertyInfo.IsDefined(ignoreAttribute, true)))
-                {
-                    return null;
-                }
+            var propPrivateSetMethod = propertyInfo.GetSetMethod(true);
+            if (propPrivateSetMethod == null)
+            {
+                return null;
+            }
 
-                return propertyInfo;
-            });
+            if (ignoreAttributeTypes != null && ignoreAttributeTypes.Any(ignoreAttribute => propertyInfo.IsDefined(ignoreAttribute, true)))
+            {
+                return null;
+            }
 
-            property?.SetValue(obj, valueFactory(obj));
+            return propertyInfo;
         }
     }
 }

@@ -4,109 +4,143 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Options;
+using Volo.Abp.AspNetCore.Middleware;
 using Volo.Abp.Auditing;
 using Volo.Abp.DependencyInjection;
 using Volo.Abp.Uow;
 using Volo.Abp.Users;
 
-namespace Volo.Abp.AspNetCore.Auditing
+namespace Volo.Abp.AspNetCore.Auditing;
+
+public class AbpAuditingMiddleware : AbpMiddlewareBase, ITransientDependency
 {
-    public class AbpAuditingMiddleware : IMiddleware, ITransientDependency
+    private readonly IAuditingManager _auditingManager;
+    protected AbpAuditingOptions AuditingOptions { get; }
+    protected AbpAspNetCoreAuditingOptions AspNetCoreAuditingOptions { get; }
+    protected ICurrentUser CurrentUser { get; }
+    protected IUnitOfWorkManager UnitOfWorkManager { get; }
+
+    public AbpAuditingMiddleware(
+        IAuditingManager auditingManager,
+        ICurrentUser currentUser,
+        IOptions<AbpAuditingOptions> auditingOptions,
+        IOptions<AbpAspNetCoreAuditingOptions> aspNetCoreAuditingOptions,
+        IUnitOfWorkManager unitOfWorkManager)
     {
-        private readonly IAuditingManager _auditingManager;
-        protected AbpAuditingOptions AuditingOptions { get; }
-        protected AbpAspNetCoreAuditingOptions AspNetCoreAuditingOptions { get; }
-        protected ICurrentUser CurrentUser { get; }
-        protected IUnitOfWorkManager UnitOfWorkManager { get; }
+        _auditingManager = auditingManager;
 
-        public AbpAuditingMiddleware(
-            IAuditingManager auditingManager,
-            ICurrentUser currentUser,
-            IOptions<AbpAuditingOptions> auditingOptions,
-            IOptions<AbpAspNetCoreAuditingOptions> aspNetCoreAuditingOptions,
-            IUnitOfWorkManager unitOfWorkManager)
+        CurrentUser = currentUser;
+        UnitOfWorkManager = unitOfWorkManager;
+        AuditingOptions = auditingOptions.Value;
+        AspNetCoreAuditingOptions = aspNetCoreAuditingOptions.Value;
+    }
+
+    public async override Task InvokeAsync(HttpContext context, RequestDelegate next)
+    {
+        if (await ShouldSkipAsync(context, next) || !AuditingOptions.IsEnabled || IsIgnoredUrl(context))
         {
-            _auditingManager = auditingManager;
-
-            CurrentUser = currentUser;
-            UnitOfWorkManager = unitOfWorkManager;
-            AuditingOptions = auditingOptions.Value;
-            AspNetCoreAuditingOptions = aspNetCoreAuditingOptions.Value;
+            await next(context);
+            return;
         }
 
-        public async Task InvokeAsync(HttpContext context, RequestDelegate next)
+        var hasError = false;
+        using (var saveHandle = _auditingManager.BeginScope())
         {
-            if (!AuditingOptions.IsEnabled || IsIgnoredUrl(context))
+            Debug.Assert(_auditingManager.Current != null);
+
+            try
             {
                 await next(context);
-                return;
-            }
 
-            var hasError = false;
-            using (var saveHandle = _auditingManager.BeginScope())
-            {
-                Debug.Assert(_auditingManager.Current != null);
-
-                try
-                {
-                    await next(context);
-
-                    if (_auditingManager.Current.Log.Exceptions.Any())
-                    {
-                        hasError = true;
-                    }
-                }
-                catch (Exception ex)
+                if (_auditingManager.Current.Log.Exceptions.Any())
                 {
                     hasError = true;
-
-                    if (!_auditingManager.Current.Log.Exceptions.Contains(ex))
-                    {
-                        _auditingManager.Current.Log.Exceptions.Add(ex);
-                    }
-
-                    throw;
                 }
-                finally
+            }
+            catch (Exception ex)
+            {
+                hasError = true;
+
+                if (!_auditingManager.Current.Log.Exceptions.Contains(ex))
                 {
-                    if (ShouldWriteAuditLog(context, hasError))
+                    _auditingManager.Current.Log.Exceptions.Add(ex);
+                }
+
+                throw;
+            }
+            finally
+            {
+                if (await ShouldWriteAuditLogAsync(_auditingManager.Current.Log, context, hasError))
+                {
+                    if (UnitOfWorkManager.Current != null)
                     {
-                        if (UnitOfWorkManager.Current != null)
+                        try
                         {
                             await UnitOfWorkManager.Current.SaveChangesAsync();
                         }
-
-                        await saveHandle.SaveAsync();
+                        catch (Exception ex)
+                        {
+                            if (!_auditingManager.Current.Log.Exceptions.Contains(ex))
+                            {
+                                _auditingManager.Current.Log.Exceptions.Add(ex);
+                            }
+                        }
                     }
+
+                    await saveHandle.SaveAsync();
                 }
             }
         }
+    }
 
-        private bool IsIgnoredUrl(HttpContext context)
+    private bool IsIgnoredUrl(HttpContext context)
+    {
+        if (context.Request.Path.Value == null)
         {
-            return context.Request.Path.Value != null &&
-                   AspNetCoreAuditingOptions.IgnoredUrls.Any(x => context.Request.Path.Value.StartsWith(x));
+            return false;
         }
 
-        private bool ShouldWriteAuditLog(HttpContext httpContext, bool hasError)
+        if (!AuditingOptions.IsEnabledForIntegrationServices &&
+            context.Request.Path.Value.StartsWith($"/{AbpAspNetCoreConsts.DefaultIntegrationServiceApiPrefix}/", StringComparison.OrdinalIgnoreCase))
         {
-            if (AuditingOptions.AlwaysLogOnException && hasError)
+            return true;
+        }
+
+        if (AspNetCoreAuditingOptions.IgnoredUrls.Any(x => context.Request.Path.Value.StartsWith(x, StringComparison.OrdinalIgnoreCase)))
+        {
+            return true;
+        }
+
+        return false;
+    }
+
+    private async Task<bool> ShouldWriteAuditLogAsync(AuditLogInfo auditLogInfo, HttpContext httpContext, bool hasError)
+    {
+        foreach (var selector in AuditingOptions.AlwaysLogSelectors)
+        {
+            if (await selector(auditLogInfo))
             {
                 return true;
             }
+        }
 
-            if (!AuditingOptions.IsEnabledForAnonymousUsers && !CurrentUser.IsAuthenticated)
-            {
-                return false;
-            }
-
-            if (!AuditingOptions.IsEnabledForGetRequests &&
-                string.Equals(httpContext.Request.Method, HttpMethods.Get, StringComparison.OrdinalIgnoreCase))
-            {
-                return false;
-            }
-
+        if (AuditingOptions.AlwaysLogOnException && hasError)
+        {
             return true;
         }
+
+        if (!AuditingOptions.IsEnabledForAnonymousUsers && !CurrentUser.IsAuthenticated)
+        {
+            return false;
+        }
+
+        if (!AuditingOptions.IsEnabledForGetRequests &&
+            (string.Equals(httpContext.Request.Method, HttpMethods.Get, StringComparison.OrdinalIgnoreCase) ||
+             string.Equals(httpContext.Request.Method, HttpMethods.Head, StringComparison.OrdinalIgnoreCase)))
+        {
+            return false;
+        }
+
+        return true;
     }
 }

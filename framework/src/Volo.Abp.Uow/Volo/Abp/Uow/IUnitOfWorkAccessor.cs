@@ -1,12 +1,10 @@
 using JetBrains.Annotations;
 
-namespace Volo.Abp.Uow
-{
-    public interface IUnitOfWorkAccessor
-    {
-        [CanBeNull]
-        IUnitOfWork UnitOfWork { get; }
+namespace Volo.Abp.Uow;
 
-        void SetUnitOfWork([CanBeNull] IUnitOfWork unitOfWork);
-    }
+public interface IUnitOfWorkAccessor
+{
+    IUnitOfWork? UnitOfWork { get; }
+
+    void SetUnitOfWork(IUnitOfWork? unitOfWork);
 }

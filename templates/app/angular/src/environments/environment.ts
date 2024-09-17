@@ -10,12 +10,12 @@ export const environment = {
     logoUrl: '',
   },
   oAuthConfig: {
-    issuer: 'https://localhost:44305',
+    issuer: 'https://localhost:44305/',
     redirectUri: baseUrl,
     clientId: 'MyProjectName_App',
     responseType: 'code',
-    scope: 'offline_access openid profile role email phone MyProjectName',
-    requireHttps: true
+    scope: 'offline_access MyProjectName',
+    requireHttps: true,
   },
   apis: {
     default: {

@@ -5,28 +5,39 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Volo.Abp.DependencyInjection;
 
-namespace Volo.Abp.Authorization.Permissions
+namespace Volo.Abp.Authorization.Permissions;
+
+public class PermissionValueProviderManager : IPermissionValueProviderManager, ISingletonDependency
 {
-    public class PermissionValueProviderManager : IPermissionValueProviderManager, ISingletonDependency
+    public IReadOnlyList<IPermissionValueProvider> ValueProviders => _lazyProviders.Value;
+    private readonly Lazy<List<IPermissionValueProvider>> _lazyProviders;
+
+    protected AbpPermissionOptions Options { get; }
+    protected IServiceProvider ServiceProvider { get; }
+
+    public PermissionValueProviderManager(
+        IServiceProvider serviceProvider,
+        IOptions<AbpPermissionOptions> options)
     {
-        public IReadOnlyList<IPermissionValueProvider> ValueProviders => _lazyProviders.Value;
-        private readonly Lazy<List<IPermissionValueProvider>> _lazyProviders;
+        Options = options.Value;
+        ServiceProvider = serviceProvider;
 
-        protected AbpPermissionOptions Options { get; }
-
-        public PermissionValueProviderManager(
-            IServiceProvider serviceProvider,
-            IOptions<AbpPermissionOptions> options)
+        _lazyProviders = new Lazy<List<IPermissionValueProvider>>(GetProviders, true);
+    }
+    
+    protected virtual List<IPermissionValueProvider> GetProviders()
+    {
+        var providers = Options
+            .ValueProviders
+            .Select(type => (ServiceProvider.GetRequiredService(type) as IPermissionValueProvider)!)
+            .ToList();
+        
+        var multipleProviders = providers.GroupBy(p => p.Name).FirstOrDefault(x => x.Count() > 1);
+        if(multipleProviders != null)
         {
-            Options = options.Value;
-
-            _lazyProviders = new Lazy<List<IPermissionValueProvider>>(
-                () => Options
-                    .ValueProviders
-                    .Select(c => serviceProvider.GetRequiredService(c) as IPermissionValueProvider)
-                    .ToList(),
-                true
-            );
+            throw new AbpException($"Duplicate permission value provider name detected: {multipleProviders.Key}. Providers:{Environment.NewLine}{multipleProviders.Select(p => p.GetType().FullName!).JoinAsString(Environment.NewLine)}");
         }
+
+        return providers;
     }
 }

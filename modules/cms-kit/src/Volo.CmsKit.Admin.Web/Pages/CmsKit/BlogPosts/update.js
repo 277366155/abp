@@ -4,16 +4,20 @@ $(function () {
 
     var $selectBlog = $('#BlogSelectionSelect');
     var $formUpdate = $('#form-blog-post-update');
+    var $title = $('#ViewModel_Title');
     var $coverImage = $('#ViewModel_CoverImageMediaId');
     var $slug = $('#ViewModel_Slug');
     var $buttonSubmit = $('#button-blog-post-update');
     var $blogPostIdInput = $('#Id');
     var $tagsInput = $('.tag-editor-form input[name=tags]');
     var $fileInput = $('#BlogPostCoverImage');
+    var $buttonRemoveCoverImage = $('#button-remove-cover-image');
+    var widgetModal = new abp.ModalManager({ viewUrl: abp.appPath + "CmsKit/Contents/AddWidgetModal", modalClass: "addWidgetModal" });
 
     var UPPY_FILE_ID = "uppy-upload-file";
 
     var isTagsEnabled = true;
+    var message = l('BlogPostSaveConfirmationMessage', $title.val());
 
     $formUpdate.data('validator').settings.ignore = ":hidden, [contenteditable='true']:not([name]), .tui-popup-wrapper";
 
@@ -29,12 +33,14 @@ $(function () {
 
     initSelectBlog();
 
-    $formUpdate.on('submit', function (e) {
+    $formUpdate.on('submit', async function (e) {
         e.preventDefault();
 
         if ($formUpdate.valid()) {
 
             abp.ui.setBusy();
+
+            await submitCoverImage();
 
             $formUpdate.ajaxSubmit({
                 success: function (result) {
@@ -58,27 +64,30 @@ $(function () {
 
     $buttonSubmit.click(function (e) {
         e.preventDefault();
-        submitCoverImage();
+        $formUpdate.submit();
     });
 
     function submitEntityTags(blogPostId) {
 
-        var tags = $tagsInput.val().split(',').map(x => x.trim()).filter(x => x);
+        if ($tagsInput.val()) {
 
-        if (tags.length === 0) {
-            finishSaving();
-            return;
+            var tags = $tagsInput.val().split(',').map(x => x.trim()).filter(x => x);
+
+            if (tags.length > 0) {
+                volo.cmsKit.admin.tags.entityTagAdmin
+                    .setEntityTags({
+                        entityType: 'BlogPost',
+                        entityId: blogPostId,
+                        tags: tags
+                    })
+                    .then(function (result) {
+                        finishSaving(result);
+                    });
+                return;
+            }
         }
 
-        volo.cmsKit.admin.tags.entityTagAdmin
-            .setEntityTags({
-                entityType: 'BlogPost',
-                entityId: blogPostId,
-                tags: tags
-            })
-            .then(function (result) {
-                finishSaving(result);
-            });
+        finishSaving();
     }
 
     function getUppyHeaders() {
@@ -88,7 +97,7 @@ $(function () {
         return headers;
     }
 
-    function submitCoverImage() {
+    async function submitCoverImage() {
         abp.ui.setBusy();
 
         var UPPY_OPTIONS = {
@@ -99,9 +108,9 @@ $(function () {
             headers: getUppyHeaders()
         };
 
-        var UPPY = Uppy.Core().use(Uppy.XHRUpload, UPPY_OPTIONS);
+        var UPPY = new Uppy.Uppy().use(Uppy.XHRUpload, UPPY_OPTIONS);
 
-        UPPY.reset();
+        UPPY.cancelAll();
 
         var file = $fileInput[0].files[0];
 
@@ -114,23 +123,18 @@ $(function () {
                 data: file, // file
             });
 
-            UPPY.upload().then((result) => {
-                if (result.failed.length > 0) {
-                    abp.message.error(l("UploadFailedMessage"));
-                } else {
-                    $coverImage.val(result.successful[0].response.body.id);
+            var result = await UPPY.upload();
 
-                    $formUpdate.submit();
-                }
-            });
-        }
-        else {
-            $formUpdate.submit();
+            if (result.failed.length > 0) {
+                abp.message.error(l("UploadFailedMessage"));
+            } else {
+                $coverImage.val(result.successful[0].response.body.id);
+            }
         }
     }
 
     function finishSaving(result) {
-        abp.notify.success(l('SuccessfullySaved'));
+        abp.notify.success(l('SavedSuccessfully'));
         abp.ui.clearBusy();
         location.href = "../../BlogPosts";
     }
@@ -152,35 +156,46 @@ $(function () {
         }
     }
 
-
     // -----------------------------------
     var fileUploadUri = "/api/cms-kit-admin/media/blogpost";
     var fileUriPrefix = "/api/cms-kit/media/";
 
-    initAllEditors();
+    initEditor();
 
-    function initAllEditors() {
-        $('.content-editor').each(function (i, item) {
-            initEditor(item);
-        });
-    }
-
-    function initEditor(element) {
-        var $editorContainer = $(element);
+    var editor;
+    var addWidgetButton;
+    function initEditor() {
+        var $editorContainer = $("#ContentEditor");
         var inputName = $editorContainer.data('input-id');
         var $editorInput = $('#' + inputName);
         var initialValue = $editorInput.val();
 
-        var editor = new toastui.Editor({
+        addWidgetButton = createAddWidgetButton();
+
+        editor = new toastui.Editor({
             el: $editorContainer[0],
             usageStatistics: false,
             useCommandShortcut: true,
             initialValue: initialValue,
             previewStyle: 'tab',
+            plugins: [toastui.Editor.plugin.codeSyntaxHighlight],
             height: "100%",
             minHeight: "25em",
             initialEditType: 'markdown',
             language: $editorContainer.data("language"),
+            toolbarItems: [
+                ['heading', 'bold', 'italic', 'strike'],
+                ['hr', 'quote'],
+                ['ul', 'ol', 'task', 'indent', 'outdent'],
+                ['table', 'image', 'link'],
+                ['code', 'codeblock'],
+                // Using Option: Customize the last button
+                [{
+                    el: addWidgetButton,
+                    command: 'bold',
+                    tooltip: 'Add Widget'
+                }]
+            ],
             hooks: {
                 addImageBlobHook: uploadFile,
             },
@@ -202,9 +217,9 @@ $(function () {
             headers: getUppyHeaders()
         };
 
-        var UPPY = Uppy.Core().use(Uppy.XHRUpload, UPPY_OPTIONS);
+        var UPPY = new Uppy.Uppy().use(Uppy.XHRUpload, UPPY_OPTIONS);
 
-        UPPY.reset();
+        UPPY.cancelAll();
 
         UPPY.addFile({
             id: "content-file",
@@ -223,5 +238,64 @@ $(function () {
                 callback(fileUrl, mediaDto.name);
             }
         });
+    }
+
+    $buttonRemoveCoverImage.on('click', function () {
+        abp.message.confirm(
+            l('RemoveCoverImageConfirmationMessage'),
+            function (isConfirmed) {
+                if (isConfirmed) {
+                    $coverImage.val(null);
+                    $('#CurrentCoverImageArea').remove();
+                }
+            }
+        );
+    });
+
+    $('#GeneratedWidgetText').on('change', function () {
+        var txt = $('#GeneratedWidgetText').val();
+        editor.insertText(txt);
+    });
+
+    var $previewArea;
+    $('.tab-item').on('click', function () {
+        if ($(this).attr("aria-label") == 'Preview' && editor.isMarkdownMode()) {
+
+            if(!$previewArea){
+                $previewArea = $("#ContentEditor .toastui-editor-md-preview");
+                $previewArea.replaceWith("<iframe id='previewArea' style='height: 100%; width: 100%; border: 0px; display: inline;'></iframe>");
+            }
+
+            $previewArea.attr("srcdoc", '');
+
+            addWidgetButton.disabled = true;
+            let content = editor.getMarkdown();
+            localStorage.setItem('content', content);
+
+            $.post("/CmsKitCommonWidgets/ContentPreview", { content: content }, function (result) {
+                $previewArea = $("#previewArea");
+                $previewArea.attr("srcdoc", result);
+            });
+        }
+        else if ($(this).attr("aria-label") == 'Write') {
+            addWidgetButton.disabled = false;
+            var retrievedObject = localStorage.getItem('content');
+            editor.setMarkdown(retrievedObject);
+        }
+    });
+
+    function createAddWidgetButton() {
+        const button = document.createElement('button');
+
+        button.className = 'toastui-editor-toolbar-icons last dropdown';
+        button.style.backgroundImage = 'none';
+        button.style.margin = '0';
+        button.innerHTML = `W`;
+        button.addEventListener('click', (event) => {
+            event.preventDefault();
+            widgetModal.open();
+        });
+
+        return button;
     }
 });

@@ -3,12 +3,12 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using Volo.Abp.ObjectExtending;
 
-namespace Volo.CmsKit.Admin.Menus
+namespace Volo.CmsKit.Admin.Menus;
+
+[Serializable]
+public class MenuUpdateInput : ExtensibleObject
 {
-    [Serializable]
-    public class MenuUpdateInput
-    {
-        public string Name { get; set; }
-    }
+    public string Name { get; set; }
 }

@@ -1,12 +1,15 @@
 ﻿using AutoMapper;
+using Volo.Abp.AutoMapper;
+using Volo.CmsKit.Menus;
+using Volo.CmsKit.Public.Comments;
 
-namespace Volo.CmsKit.Public.Web
+namespace Volo.CmsKit.Public.Web;
+
+public class CmsKitPublicWebAutoMapperProfile : Profile
 {
-    public class CmsKitPublicWebAutoMapperProfile : Profile
+    public CmsKitPublicWebAutoMapperProfile()
     {
-        public CmsKitPublicWebAutoMapperProfile()
-        {
-
-        }
+        CreateMap<CreateCommentWithParametersInput, CreateCommentInput>()
+            .Ignore(x=> x.ExtraProperties);
     }
 }

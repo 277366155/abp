@@ -3,19 +3,23 @@ using Volo.CmsKit.Blogs;
 using Volo.CmsKit.Tags;
 using Volo.CmsKit.Users;
 
-namespace Volo.CmsKit
+namespace Volo.CmsKit;
+
+public class CmsKitCommonApplicationAutoMapperProfile : Profile
 {
-    public class CmsKitCommonApplicationAutoMapperProfile : Profile
+    public CmsKitCommonApplicationAutoMapperProfile()
     {
-        public CmsKitCommonApplicationAutoMapperProfile()
-        {
-            CreateMap<Tag, TagDto>();
+        CreateMap<Tag, TagDto>().MapExtraProperties();
 
-            CreateMap<CmsUser, CmsUserDto>();
+        CreateMap<PopularTag, PopularTagDto>();
 
-            CreateMap<BlogFeature, BlogFeatureCacheItem>();
-            CreateMap<BlogFeature, BlogFeatureDto>();
-            CreateMap<BlogFeatureCacheItem, BlogFeatureDto>().ReverseMap();
-        }
+        CreateMap<CmsUser, CmsUserDto>().MapExtraProperties();
+
+        CreateMap<BlogFeature, BlogFeatureCacheItem>().MapExtraProperties();
+        CreateMap<BlogFeature, BlogFeatureDto>().MapExtraProperties();
+        CreateMap<BlogFeatureCacheItem, BlogFeatureDto>()
+            .MapExtraProperties()
+            .ReverseMap()
+            .MapExtraProperties();
     }
 }

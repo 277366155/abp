@@ -1,162 +1,137 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
-using Microsoft.Extensions.Caching.Distributed;
-using Volo.Abp.AspNetCore.Mvc.MultiTenancy;
+using Microsoft.Extensions.Options;
+using Pages.Abp.MultiTenancy.ClientProxies;
 using Volo.Abp.Caching;
 using Volo.Abp.DependencyInjection;
-using Volo.Abp.Http.Client.DynamicProxying;
 using Volo.Abp.MultiTenancy;
 using Volo.Abp.Threading;
 
-namespace Volo.Abp.AspNetCore.Mvc.Client
+namespace Volo.Abp.AspNetCore.Mvc.Client;
+
+public class MvcRemoteTenantStore : ITenantStore, ITransientDependency
 {
-    public class MvcRemoteTenantStore : ITenantStore, ITransientDependency
+    protected AbpTenantClientProxy TenantAppService { get; }
+    protected IHttpContextAccessor HttpContextAccessor { get; }
+    protected IDistributedCache<TenantConfigurationCacheItem> Cache { get; }
+    protected AbpAspNetCoreMvcClientCacheOptions Options { get; }
+
+    public MvcRemoteTenantStore(
+        AbpTenantClientProxy tenantAppService,
+        IHttpContextAccessor httpContextAccessor,
+        IDistributedCache<TenantConfigurationCacheItem> cache,
+        IOptions<AbpAspNetCoreMvcClientCacheOptions> options)
     {
-        protected IHttpClientProxy<IAbpTenantAppService> Proxy { get; }
-        protected IHttpContextAccessor HttpContextAccessor { get; }
-        protected IDistributedCache<TenantConfiguration> Cache { get; }
+        TenantAppService = tenantAppService;
+        HttpContextAccessor = httpContextAccessor;
+        Cache = cache;
+        Options = options.Value;
+    }
 
-        public MvcRemoteTenantStore(
-            IHttpClientProxy<IAbpTenantAppService> proxy,
-            IHttpContextAccessor httpContextAccessor,
-            IDistributedCache<TenantConfiguration> cache)
+    public async Task<TenantConfiguration?> FindAsync(string normalizedName)
+    {
+        var cacheKey = TenantConfigurationCacheItem.CalculateCacheKey(normalizedName);
+        var httpContext = HttpContextAccessor?.HttpContext;
+
+        if (httpContext != null && httpContext.Items[cacheKey] is TenantConfigurationCacheItem tenantConfigurationInHttpContext)
         {
-            Proxy = proxy;
-            HttpContextAccessor = httpContextAccessor;
-            Cache = cache;
+            return tenantConfigurationInHttpContext?.Value;
         }
 
-        public async Task<TenantConfiguration> FindAsync(string name)
+        var tenantConfiguration = await Cache.GetAsync(cacheKey);
+        if (tenantConfiguration?.Value == null)
         {
-            var cacheKey = CreateCacheKey(name);
-            var httpContext = HttpContextAccessor?.HttpContext;
-
-            if (httpContext != null && httpContext.Items[cacheKey] is TenantConfiguration tenantConfiguration)
-            {
-                return tenantConfiguration;
-            }
-
-            tenantConfiguration = await Cache.GetOrAddAsync(
-                cacheKey,
-                async () => CreateTenantConfiguration(await Proxy.Service.FindTenantByNameAsync(name)),
-                () => new DistributedCacheEntryOptions
-                {
-                    AbsoluteExpirationRelativeToNow =
-                        TimeSpan.FromMinutes(5) //TODO: Should be configurable.
-                }
-            );
-
-            if (httpContext != null)
-            {
-                httpContext.Items[cacheKey] = tenantConfiguration;
-            }
-
-            return tenantConfiguration;
+            var tenant = await TenantAppService.FindTenantByNameAsync(normalizedName);
+            tenantConfiguration = await Cache.GetAsync(cacheKey);
         }
 
-        public async Task<TenantConfiguration> FindAsync(Guid id)
+        if (httpContext != null)
         {
-            var cacheKey = CreateCacheKey(id);
-            var httpContext = HttpContextAccessor?.HttpContext;
-
-            if (httpContext != null && httpContext.Items[cacheKey] is TenantConfiguration tenantConfiguration)
-            {
-                return tenantConfiguration;
-            }
-
-            tenantConfiguration = await Cache.GetOrAddAsync(
-                cacheKey,
-                async () => CreateTenantConfiguration(await Proxy.Service.FindTenantByIdAsync(id)),
-                () => new DistributedCacheEntryOptions
-                {
-                    AbsoluteExpirationRelativeToNow =
-                        TimeSpan.FromMinutes(5) //TODO: Should be configurable.
-                }
-            );
-
-            if (httpContext != null)
-            {
-                httpContext.Items[cacheKey] = tenantConfiguration;
-            }
-
-            return tenantConfiguration;
+            httpContext.Items[cacheKey] = tenantConfiguration;
         }
 
-        public TenantConfiguration Find(string name)
+        return tenantConfiguration?.Value;
+    }
+
+    public async Task<TenantConfiguration?> FindAsync(Guid id)
+    {
+        var cacheKey = TenantConfigurationCacheItem.CalculateCacheKey(id);
+        var httpContext = HttpContextAccessor?.HttpContext;
+
+        if (httpContext != null && httpContext.Items[cacheKey] is TenantConfigurationCacheItem tenantConfigurationInHttpContext)
         {
-            var cacheKey = CreateCacheKey(name);
-            var httpContext = HttpContextAccessor?.HttpContext;
-
-            if (httpContext != null && httpContext.Items[cacheKey] is TenantConfiguration tenantConfiguration)
-            {
-                return tenantConfiguration;
-            }
-
-            tenantConfiguration = Cache.GetOrAdd(
-                cacheKey,
-                () => AsyncHelper.RunSync(async () => CreateTenantConfiguration(await Proxy.Service.FindTenantByNameAsync(name))),
-                () => new DistributedCacheEntryOptions
-                {
-                    AbsoluteExpirationRelativeToNow =
-                        TimeSpan.FromMinutes(5) //TODO: Should be configurable.
-                }
-            );
-
-            if (httpContext != null)
-            {
-                httpContext.Items[cacheKey] = tenantConfiguration;
-            }
-
-            return tenantConfiguration;
+            return tenantConfigurationInHttpContext?.Value;
         }
 
-        public TenantConfiguration Find(Guid id)
+        var tenantConfiguration = await Cache.GetAsync(cacheKey);
+        if (tenantConfiguration?.Value == null)
         {
-            var cacheKey = CreateCacheKey(id);
-            var httpContext = HttpContextAccessor?.HttpContext;
-
-            if (httpContext != null && httpContext.Items[cacheKey] is TenantConfiguration tenantConfiguration)
-            {
-                return tenantConfiguration;
-            }
-
-            tenantConfiguration = Cache.GetOrAdd(
-                cacheKey,
-                () => AsyncHelper.RunSync(async () => CreateTenantConfiguration(await Proxy.Service.FindTenantByIdAsync(id))),
-                () => new DistributedCacheEntryOptions
-                {
-                    AbsoluteExpirationRelativeToNow =
-                        TimeSpan.FromMinutes(5) //TODO: Should be configurable.
-                }
-            );
-
-            if (httpContext != null)
-            {
-                httpContext.Items[cacheKey] = tenantConfiguration;
-            }
-
-            return tenantConfiguration;
+            await TenantAppService.FindTenantByIdAsync(id);
+            tenantConfiguration = await Cache.GetAsync(cacheKey);
         }
 
-        protected virtual TenantConfiguration CreateTenantConfiguration(FindTenantResultDto tenantResultDto)
+        if (httpContext != null)
         {
-            if (!tenantResultDto.Success || tenantResultDto.TenantId == null)
-            {
-                return null;
-            }
-
-            return new TenantConfiguration(tenantResultDto.TenantId.Value, tenantResultDto.Name);
+            httpContext.Items[cacheKey] = tenantConfiguration;
         }
 
-        protected virtual string CreateCacheKey(string tenantName)
+        return tenantConfiguration?.Value;
+    }
+
+    public Task<IReadOnlyList<TenantConfiguration>> GetListAsync(bool includeDetails = false)
+    {
+        return Task.FromResult<IReadOnlyList<TenantConfiguration>>(Array.Empty<TenantConfiguration>());
+    }
+
+    public TenantConfiguration? Find(string normalizedName)
+    {
+        var cacheKey = TenantConfigurationCacheItem.CalculateCacheKey(normalizedName);
+        var httpContext = HttpContextAccessor?.HttpContext;
+
+        if (httpContext != null && httpContext.Items[cacheKey] is TenantConfigurationCacheItem tenantConfigurationInHttpContext)
         {
-            return $"RemoteTenantStore_Name_{tenantName}";
+            return tenantConfigurationInHttpContext?.Value;
         }
 
-        protected virtual string CreateCacheKey(Guid tenantId)
+        var tenantConfiguration = Cache.Get(cacheKey);
+        if (tenantConfiguration?.Value == null)
         {
-            return $"RemoteTenantStore_Id_{tenantId:N}";
+            AsyncHelper.RunSync(async () => await TenantAppService.FindTenantByNameAsync(normalizedName));
+            tenantConfiguration = Cache.Get(cacheKey);
         }
+
+        if (httpContext != null)
+        {
+            httpContext.Items[cacheKey] = tenantConfiguration;
+        }
+
+        return tenantConfiguration?.Value;
+    }
+
+    public TenantConfiguration? Find(Guid id)
+    {
+        var cacheKey = TenantConfigurationCacheItem.CalculateCacheKey(id);
+        var httpContext = HttpContextAccessor?.HttpContext;
+
+        if (httpContext != null && httpContext.Items[cacheKey] is TenantConfigurationCacheItem tenantConfigurationInHttpContext)
+        {
+            return tenantConfigurationInHttpContext?.Value;
+        }
+
+        var tenantConfiguration = Cache.Get(cacheKey);
+        if (tenantConfiguration?.Value == null)
+        {
+            AsyncHelper.RunSync(async () => await TenantAppService.FindTenantByIdAsync(id));
+            tenantConfiguration = Cache.Get(cacheKey);
+        }
+
+        if (httpContext != null)
+        {
+            httpContext.Items[cacheKey] = tenantConfiguration;
+        }
+
+        return tenantConfiguration?.Value;
     }
 }

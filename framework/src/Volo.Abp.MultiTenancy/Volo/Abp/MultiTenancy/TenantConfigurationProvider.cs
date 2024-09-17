@@ -1,71 +1,78 @@
 ﻿using System;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Localization;
 using Volo.Abp.DependencyInjection;
+using Volo.Abp.MultiTenancy.Localization;
 
-namespace Volo.Abp.MultiTenancy
+namespace Volo.Abp.MultiTenancy;
+
+public class TenantConfigurationProvider : ITenantConfigurationProvider, ITransientDependency
 {
-    public class TenantConfigurationProvider : ITenantConfigurationProvider, ITransientDependency
+    protected virtual ITenantResolver TenantResolver { get; }
+    protected virtual ITenantStore TenantStore { get; }
+    protected virtual ITenantNormalizer TenantNormalizer { get; }
+    protected virtual ITenantResolveResultAccessor TenantResolveResultAccessor { get; }
+    protected virtual IStringLocalizer<AbpMultiTenancyResource> StringLocalizer { get; }
+
+    public TenantConfigurationProvider(
+        ITenantResolver tenantResolver,
+        ITenantStore tenantStore,
+        ITenantResolveResultAccessor tenantResolveResultAccessor,
+        IStringLocalizer<AbpMultiTenancyResource> stringLocalizer,
+        ITenantNormalizer tenantNormalizer)
     {
-        protected virtual ITenantResolver TenantResolver { get; }
-        protected virtual ITenantStore TenantStore { get; }
-        protected virtual ITenantResolveResultAccessor TenantResolveResultAccessor { get; }
+        TenantResolver = tenantResolver;
+        TenantStore = tenantStore;
+        TenantNormalizer = tenantNormalizer;
+        TenantResolveResultAccessor = tenantResolveResultAccessor;
+        StringLocalizer = stringLocalizer;
+    }
 
-        public TenantConfigurationProvider(
-            ITenantResolver tenantResolver,
-            ITenantStore tenantStore,
-            ITenantResolveResultAccessor tenantResolveResultAccessor)
+    public virtual async Task<TenantConfiguration?> GetAsync(bool saveResolveResult = false)
+    {
+        var resolveResult = await TenantResolver.ResolveTenantIdOrNameAsync();
+
+        if (saveResolveResult)
         {
-            TenantResolver = tenantResolver;
-            TenantStore = tenantStore;
-            TenantResolveResultAccessor = tenantResolveResultAccessor;
+            TenantResolveResultAccessor.Result = resolveResult;
         }
 
-        public virtual async Task<TenantConfiguration> GetAsync(bool saveResolveResult = false)
+        TenantConfiguration? tenant = null;
+        if (resolveResult.TenantIdOrName != null)
         {
-            var resolveResult = await TenantResolver.ResolveTenantIdOrNameAsync();
+            tenant = await FindTenantAsync(resolveResult.TenantIdOrName);
 
-            if (saveResolveResult)
+            if (tenant == null)
             {
-                TenantResolveResultAccessor.Result = resolveResult;
+                throw new BusinessException(
+                    code: "Volo.AbpIo.MultiTenancy:010001",
+                    message: StringLocalizer["TenantNotFoundMessage"],
+                    details: StringLocalizer["TenantNotFoundDetails", resolveResult.TenantIdOrName]
+                );
             }
 
-            TenantConfiguration tenant = null;
-            if (resolveResult.TenantIdOrName != null)
+            if (!tenant.IsActive)
             {
-                tenant = await FindTenantAsync(resolveResult.TenantIdOrName);
-
-                if (tenant == null)
-                {
-                    throw new BusinessException(
-                        code: "Volo.AbpIo.MultiTenancy:010001",
-                        message: "Tenant not found!",
-                        details: "There is no tenant with the tenant id or name: " + resolveResult.TenantIdOrName
-                    );
-                }
-
-                if (!tenant.IsActive)
-                {
-                    throw new BusinessException(
-                        code: "Volo.AbpIo.MultiTenancy:010002",
-                        message: "Tenant not active!",
-                        details: "The tenant is no active with the tenant id or name: " + resolveResult.TenantIdOrName
-                    );
-                }
+                throw new BusinessException(
+                    code: "Volo.AbpIo.MultiTenancy:010002",
+                    message: StringLocalizer["TenantNotActiveMessage"],
+                    details: StringLocalizer["TenantNotActiveDetails", resolveResult.TenantIdOrName]
+                );
             }
-
-            return tenant;
         }
 
-        protected virtual async Task<TenantConfiguration> FindTenantAsync(string tenantIdOrName)
+        return tenant;
+    }
+
+    protected virtual async Task<TenantConfiguration?> FindTenantAsync(string tenantIdOrName)
+    {
+        if (Guid.TryParse(tenantIdOrName, out var parsedTenantId))
         {
-            if (Guid.TryParse(tenantIdOrName, out var parsedTenantId))
-            {
-                return await TenantStore.FindAsync(parsedTenantId);
-            }
-            else
-            {
-                return await TenantStore.FindAsync(tenantIdOrName);
-            }
+            return await TenantStore.FindAsync(parsedTenantId);
+        }
+        else
+        {
+            return await TenantStore.FindAsync(TenantNormalizer.NormalizeName(tenantIdOrName)!);
         }
     }
 }
